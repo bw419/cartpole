@@ -157,7 +157,7 @@ C = np.load("../lin_model.npy")
 lin = get_good_linear_fit(enforce_constraints=False)
 nonlin = get_good_nonlinear_fit()
 
-model_comparison_scatter(lin, 10)
+# model_comparison_scatter(lin, 10)
 model_comparison_scatter(nonlin, 100)
 
 

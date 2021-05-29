@@ -13,6 +13,7 @@ import time
 import scipy
 import sobol_seq
 import scipy
+from scipy.signal import argrelextrema
 # import scipy.optimize
 
 plt.rcParams["savefig.directory"] = os.chdir(os.path.dirname(__file__) + "/figs")

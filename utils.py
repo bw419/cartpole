@@ -3,15 +3,18 @@ from globals import *
 # from os import urandom
 # seed = urandom(16)
 
-P_RANGE4 = np.array([15, 10, np.pi, 15])
-# P_BOUNDS4 = np.ones((4, 2))
-# P_BOUNDS4 *= P_RANGE4[:, np.newaxis]
-
 P_RANGE5 = np.array([15, 10, np.pi, 15, 25])
 # P_BOUNDS5 = np.ones((4, 2))
 # P_BOUNDS5 *= P_RANGE4[:, np.newaxis]
+P_RANGE4 = P_RANGE5[:4]
+P_RANGE = P_RANGE5
 
-VAR_STR = [r"$x$", r"$\dot{x}$", r"$\theta$", r"$\dot{\theta}$", "$F$"]
+TRAIN_P_RANGE5 = P_RANGE5#np.array([16, 11, np.pi, 16, 26])
+TRAIN_P_RANGE4 = TRAIN_P_RANGE5[:4]
+TRAIN_P_RANGE = TRAIN_P_RANGE5
+
+
+VAR_STR = (r"$x$", r"$\dot{x}$", r"$\theta$", r"$\dot{\theta}$", "$F$")
 
 
 
@@ -32,6 +35,27 @@ def format_IC(IC):
 
 
 	return "[" + ", ".join(IC_strs) + "]"
+
+
+############## RANDOM STATE GENERATION ##################
+def rand_states(bounds):
+	bounds = np.array(bounds)
+
+	state = np.random.random(len(bounds)) * 2 - 1
+
+	return state * bounds
+
+def rand_states4(bounds=None):
+	if bounds is None:
+		bounds = P_RANGE4
+	return rand_state(bounds)
+
+
+def rand_states5(bounds=None):
+	if bounds is None:
+		bounds = P_RANGE5
+	return rand_state(bounds)
+
 
 def rand_state(bounds):
 	bounds = np.array(bounds)
@@ -54,21 +78,21 @@ def rand_state5(bounds=None):
 
 # Best to do this as a power of 2
 # because it ensures balance
-def sobol_rand_states(bounds):
+def sobol_rand_states(N, bounds):
 	bounds = np.array(bounds)
 	states = sobol_seq.i4_sobol_generate(len(bounds), N)* 2 - 1
 	return states * bounds[np.newaxis, :]
 
 
-def sobol_rand_states4(bounds=None):
+def sobol_rand_states4(N, bounds=None):
 	if bounds is None:
 		bounds = P_RANGE4
-	return sobol_rand_states(bounds)
+	return sobol_rand_states(N, bounds)
 
-def sobol_rand_states5(bounds=None):
+def sobol_rand_states5(N, bounds=None):
 	if bounds is None:
 		bounds = P_RANGE5
-	return sobol_rand_states(bounds)
+	return sobol_rand_states(N, bounds)
 
 
 sobol_seed = 1
@@ -93,9 +117,10 @@ def sobol_rand_state5(bounds=None):
 		bounds = P_RANGE5
 	return sobol_rand_state(bounds)
 
+#########################################################
 
 
-def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None, NX=50, NY=50, NS=8, ax=None, incl_f=True):
+def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None, NX=50, NY=50, NS=8, ax=None, incl_f=True, pi_multiples=True):
 
 	if ax is None:
 		ax = plt.gca()
@@ -113,9 +138,9 @@ def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None,
 
 	if start_state is None:
 		start_state = np.zeros(len(bounds))
-	else:
-		start_state[xi] = 0
-		start_state[yi] = 0
+
+	# if si is not None:
+	# for k, s_val in enumerate()
 
 	for i, x_val in enumerate(x):
 		for j, y_val in enumerate(y):
@@ -137,8 +162,10 @@ def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None,
 
 	plt.sca(ax)
 
-	if xi == 2: axis_pi_multiples(ax.xaxis)
-	if yi == 2: axis_pi_multiples(ax.yaxis)
+	if pi_multiples:
+		if xi == 2: axis_pi_multiples(ax.xaxis)
+		if yi == 2: axis_pi_multiples(ax.yaxis)
+
 
 
 def line_plot(fn_to_plot, start_state=None, bounds=None, xi=2, NX=50, ax=None, incl_f=True):
@@ -157,9 +184,6 @@ def line_plot(fn_to_plot, start_state=None, bounds=None, xi=2, NX=50, ax=None, i
 
 	if start_state is None:
 		start_state = np.zeros(len(bounds))
-	else:
-		start_state[xi] = 0
-		start_state[yi] = 0
 
 	for i, x_val in enumerate(x):
 

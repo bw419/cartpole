@@ -7,32 +7,6 @@ import autograd.numpy as np
 from matplotlib.pyplot import ion, draw, Rectangle, Line2D
 import matplotlib.pyplot as plt
 
-# If theta  has gone past our conceptual limits of [-pi,pi]
-# map it onto the equivalent angle that is in the accepted range (by adding or subtracting 2pi)
-def remap_angle(theta):
-	return _remap_angle(theta)
-  
-remap_angle_v = np.vectorize(remap_angle)
-
-
-def _remap_angle(theta):
-	while theta < -np.pi:
-		theta += 2. * np.pi
-	while theta > np.pi:
-		theta -= 2. * np.pi
-	return theta
-	
-
-## loss function given a state vector. the elements of the state vector are
-## [cart location, cart velocity, pole angle, pole angular velocity]
-def _loss(state):
-	sig = 0.5
-	return 1-np.exp(-np.dot(state,state)/(2.0 * sig**2))
-
-
-def loss(state):
-	return _loss(state)
-
 
 class CartPole:
 	"""Cart Pole environment. This implementation allows multiple poles,
@@ -79,20 +53,21 @@ class CartPole:
 		if self.visual:
 			self.drawPlot()
 
-
 	def setState(self, state):
 		self.cart_location = state[0]
 		self.cart_velocity = state[1]
 		self.pole_angle = state[2]
 		self.pole_velocity = state[3]
 			
-	def getEnergy(self):
+	def getEnergy(self, custom_params=False):
 		state = self.getState()
-		V = 0.5 * self.pole_length * self.gravity * self.pole_mass * (np.cos(state[2]) - 1)
-		T = 0.5 * (self.cart_mass + self.pole_mass) * state[1]**2
-		T += 0.5 * self.pole_mass * self.pole_length * state[3] * state[1] * np.cos(state[2])
-		T += (0.5 * self.pole_mass / 3) * (self.pole_length * state[3])**2
-		return [T, V]
+		if custom_params:
+			V = 0.5 * self.pole_length * self.gravity * self.pole_mass * (np.cos(state[2]) - 1)
+			T = 0.5 * (self.cart_mass + self.pole_mass) * state[1]**2
+			T += 0.5 * self.pole_mass * self.pole_length * state[3] * state[1] * np.cos(state[2])
+			T += (0.5 * self.pole_mass / 3) * (self.pole_length * state[3])**2
+			return [T, V]
+		return get_state_energy(state)
 
 	def getState(self, energy=False):
 		if not energy:
@@ -181,27 +156,13 @@ class CartPole:
 
 sys = CartPole(0.2, False)
 
-# Repeatedly evolves the dynamics. Required 4-vector IC.
-
-def rollout(IC, N, t_step=0.2):
-
+def assert_t_step(t_step):
 	global sys
-
 	if sys.delta_time != t_step:
 		sys = CartPole(t_step, False)
 
-	sys.setState(IC)
 
-	T = np.arange(0, N)
 
-	states = np.zeros((len(T), 4))
-	states[0] = sys.getState()
-
-	for t in T[1:]:
-		sys.performAction(0.)
-		states[t] = sys.getState()
-
-	return states
 
 
 
@@ -218,9 +179,7 @@ def single_action(state, t_step=0.2):
 def single_action4(state4, t_step=0.2):
 
 	global sys
-
-	if sys.delta_time != t_step:
-		sys = CartPole(t_step, False)
+	assert_t_step(t_step)
 
 	sys.setState(state4)
 	sys.performAction(0.)
@@ -231,12 +190,21 @@ def single_action4(state4, t_step=0.2):
 def single_action5(state5, t_step=0.2):
 
 	global sys
-
-	if sys.delta_time != t_step:
-		sys = CartPole(t_step, False)
+	assert_t_step(t_step)
 
 	sys.setState(state5[:4])
 	sys.performAction(state5[4])
+
+	return np.array(sys.getState())
+
+
+def single_action(state4, action, t_step=0.2):
+
+	global sys
+	assert_t_step(t_step)
+
+	sys.setState(state4)
+	sys.performAction(action)
 
 	return np.array(sys.getState())
 
@@ -248,3 +216,69 @@ def target(state, t_step=0.2):
 		return single_action4(state) - np.array(state)
 	else:
 		return single_action5(state) - np.array(state[:4])
+
+def target4(state, t_step=0.2):
+	return single_action4(state) - np.array(state)
+
+def target5(state, t_step=0.2):
+	return single_action5(state) - np.array(state[:4])
+
+
+
+# If theta  has gone past our conceptual limits of [-pi,pi]
+# map it onto the equivalent angle that is in the accepted range (by adding or subtracting 2pi)
+def remap_angle(theta):
+	while theta < -np.pi:
+		theta += 2. * np.pi
+	while theta > np.pi:
+		theta -= 2. * np.pi
+	return theta
+  
+remap_angle_v = np.vectorize(remap_angle)
+
+# # If theta  has gone past our conceptual limits of [-pi,pi]
+# # map it onto the equivalent angle that is in the accepted range (by adding or subtracting 2pi)
+# def remap_angle(theta):
+# 	abs_theta = np.abs(theta)
+# 	sign = np.sign(theta)
+
+
+
+# 	while theta < -np.pi:
+# 		theta += 2. * np.pi
+# 	while theta > np.pi:
+# 		theta -= 2. * np.pi
+# 	return theta
+  
+# remap_angle_v = np.vectorize(remap_angle)
+
+
+
+# converts eg. target(x) to single_action(x)
+def to_update_fn(fn):
+	def new_fn(x):
+		return fn(x) + x[:4]
+	return new_fn
+
+# converts eg. single_action(x) to target(x)
+def to_diff_fn(fn):
+	def new_fn(x):
+		return fn(x) - x[:4]
+	return new_fn
+
+
+
+def get_state_energies(state):
+	V = 0.125 * 9.8 * (np.cos(state[2]) - 1)
+	T = 0.5 * state[1]**2
+	T += 0.125 * state[3] * state[1] * np.cos(state[2])
+	T += (0.0625 / 3) * (state[3])**2
+	return [T, V]
+
+def get_tot_state_energy(state):
+	V = 0.125 * 9.8 * (np.cos(state[2]) - 1)
+	T = 0.5 * state[1]**2
+	T += 0.125 * state[3] * state[1] * np.cos(state[2])
+	T += (0.0625 / 3) * (state[3])**2
+	return T+V
+

@@ -20,14 +20,14 @@ def linear_training_data(N=512, t_step=0.2, sobol=True, incl_f=True):
 	for i in range(N):
 		if sobol:
 			if incl_f: 
-				X[i,:] = 1.*sobol_rand_state5()
+				X[i,:] = 1.*sobol_rand_state5(TRAIN_P_RANGE5)
 			else: 
-				X[i,:] = 1.*sobol_rand_state4()
+				X[i,:] = 1.*sobol_rand_state4(TRAIN_P_RANGE4)
 		else:
 			if incl_f: 
-				X[i,:] = 1.*rand_state5()
+				X[i,:] = 1.*rand_state5(TRAIN_P_RANGE5)
 			else: 
-				X[i,:] = 1.*rand_state4()
+				X[i,:] = 1.*rand_state4(TRAIN_P_RANGE4)
 
 		Y[i,:] = target(X[i, :], t_step)
 
@@ -35,7 +35,7 @@ def linear_training_data(N=512, t_step=0.2, sobol=True, incl_f=True):
 
 
 # enforces lack of dependence on theta or x
-def linear_fit(N=1024, t_step=0.2, sobol=True, get_saved=True, save=False, fname="lin_train", return_data=False, incl_f=True, enforce_constraints=True):
+def linear_fit(N=1024, t_step=0.2, sobol=True, get_saved=False, save=False, fname="lin_train", return_data=False, incl_f=True, enforce_constraints=True):
 	
 	if get_saved and not save:
 		from_save = np.load("../" + fname + ".npy", allow_pickle=True)
@@ -71,39 +71,39 @@ def linear_fit(N=1024, t_step=0.2, sobol=True, get_saved=True, save=False, fname
 
 
 
-def linear_fit_2(N=512, t_step=0.2, sobol=True, get_saved=True, save=False, fname="lin_train", return_data=False, enforce_constraints=True):
+# def linear_fit_2(N=512, t_step=0.2, sobol=True, get_saved=True, save=False, fname="lin_train", return_data=False, enforce_constraints=True):
 	
-	if get_saved and not save:
-		from_save = np.load("../" + fname + ".npy", allow_pickle=True)
-		X, Y, C = from_save
+# 	if get_saved and not save:
+# 		from_save = np.load("../" + fname + ".npy", allow_pickle=True)
+# 		X, Y, C = from_save
 
-		if len(X) == N:
-			print("Retrieving saved data.")
-			return X, Y, C
-		else:
-			print("Saved data does not have requested size!")
+# 		if len(X) == N:
+# 			print("Retrieving saved data.")
+# 			return X, Y, C
+# 		else:
+# 			print("Saved data does not have requested size!")
 
-	X, Y = linear_training_data(N, t_step, sobol)
-	CT, res, rank, s = np.linalg.lstsq(X, Y, rcond=None)
-	C = CT.T
+# 	X, Y = linear_training_data(N, t_step, sobol)
+# 	CT, res, rank, s = np.linalg.lstsq(X, Y, rcond=None)
+# 	C = CT.T
 
-	if save:
-		print("Saving data.")
-		to_save = (X, Y, C)
-		np.save("../" + fname + ".npy", to_save)
+# 	if save:
+# 		print("Saving data.")
+# 		to_save = (X, Y, C)
+# 		np.save("../" + fname + ".npy", to_save)
 
+# 	if return_data:
+# 		return X, Y, C
+# 	else:
+# 		return C
+
+
+
+def get_good_linear_fit(return_data=False, enforce_constraints=True, incl_f=True):
 	if return_data:
-		return X, Y, C
+		X, Y, C = linear_fit(N=2**12, return_data=True, enforce_constraints=enforce_constraints, incl_f=incl_f)
 	else:
-		return C
-
-
-
-def get_good_linear_fit(return_data=False, enforce_constraints=True):
-	if return_data:
-		X, Y, C = linear_fit(return_data=True, enforce_constraints=enforce_constraints)
-	else:
-		C = linear_fit(return_data=False, enforce_constraints=enforce_constraints)
+		C = linear_fit(N=2**12, return_data=False, enforce_constraints=enforce_constraints, incl_f=incl_f)
 
 	def fn(x):
 		return C @ x
