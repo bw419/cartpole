@@ -255,6 +255,11 @@ remap_angle_v = np.vectorize(remap_angle)
 
 
 # converts eg. target(x) to single_action(x)
+def to_update_fn_w_action(fn):
+	def new_fn(x, action):
+		return fn([x[0], x[1], x[2], x[3], action]) + x[:4]
+	return new_fn
+
 def to_update_fn(fn):
 	def new_fn(x):
 		return fn(x) + x[:4]

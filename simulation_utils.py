@@ -217,10 +217,10 @@ def plot_rollout(IC, rollout, N=200, remap=False):
 
 def plot_rollout_comparison(IC, rollout, model_fn, N=50, remap=True, t_step=0.2, ax=None):
 
-	standalone_fig = True
+	standalone_fig = False
 	if ax is None:
 		ax = plt.gca()
-		standalone_fig = False
+		standalone_fig = True
 
 	T = np.arange(N)*t_step
 	T3 = np.arange(N*10)*t_step/10
@@ -255,35 +255,37 @@ def plot_rollout_comparison(IC, rollout, model_fn, N=50, remap=True, t_step=0.2,
 		plt.legend(loc="upper right")
 
 
-def plot_rollout(IC, rollout, N=200, remap=False):
+# states can be a 4-vector or 5-vector
+def plot_states(states, actions=None, ax=None):
+	standalone_fig = False
+	if ax is None:
+		ax = plt.gca()
+		standalone_fig = True
+
+	N = len(states)
+
+	T = np.arange(N)*0.2
+
+	if actions is not None:
+		states = np.hstack((states, [[a] for a in actions]))
 
 	for j in range(4):
-		for t_step in [0.02, 0.2]:
-			N_steps = N if t_step==0.02 else int(round(0.1*N))
+		p = ax.plot(T, states[:,j], label=VAR_STR[j])
+		ax.plot(T, states[:,j], lw=0, c=p[0].get_color(), marker="s", ms=3, mew=1, mec="k", mfc=p[0].get_color())
 
-			T = np.arange(N_steps)*t_step
+	#ax.set_title(r"Modelled trajectory"))
+	ax.set_xlabel("Time (s)", labelpad=2.0)
+	ax.set_ylabel("Variable value", va="top")
 
-			states = rollout(IC, N_steps, t_step)
+	if standalone_fig:
+		plt.legend(loc="upper right")
 
-			if remap:
-				remapped = remap_angle_v(states[:,2])
-				for i in range(1, len(T)):
-					if remapped[i] < -(np.pi-1) and remapped[i-1] > (np.pi-1):
-						remapped[i] = np.nan
-					elif remapped[i] > (np.pi-1) and remapped[i-1] < -(np.pi-1):
-						remapped[i] = np.nan
-				
+	ax1 = ax.twinx()
+	p = ax1.plot(T, states[:,4], label=VAR_STR[4], c="tab:purple")
+	ax1.plot(T, states[:,4], lw=0, c=p[0].get_color(), marker="s", ms=3, mew=1, mec="k", mfc=p[0].get_color())
 
-			if t_step == 0.02:
-				p = plt.plot(T, states[:,j], label=VAR_STR[j], lw=1.5)
 
-			else:
-				plt.plot(T, states[:,j], ls="--", lw=1, c=p[0].get_color(), marker="s", ms=3, mew=1, mec="k", mfc=p[0].get_color())
-	
-
-	plt.gcf().set_size_inches((4.8, 4.0))
-	plt.title(r"State variable evolution for I.C. " + format_IC(IC))
-	plt.xlabel("Time (s)", labelpad=2.0)
-	plt.ylabel("State variable value", va="top")
-	plt.grid(which="both", alpha=0.2)
-	plt.legend(loc="upper right")
+	if standalone_fig:
+		plt.gcf().set_size_inches((4.8, 4.0))
+		plt.grid(which="both", alpha=0.2)
+		plt.legend(loc="lower right")

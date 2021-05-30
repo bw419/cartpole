@@ -120,7 +120,7 @@ def sobol_rand_state5(bounds=None):
 #########################################################
 
 
-def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None, NX=50, NY=50, NS=8, ax=None, incl_f=True, pi_multiples=True):
+def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None, NX=50, NY=50, NS=8, ax=None, incl_f=True, pi_multiples=True, levels=None):
 
 	if ax is None:
 		ax = plt.gca()
@@ -131,8 +131,18 @@ def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None,
 		else:
 			bounds = P_RANGE4
 
-	x = np.linspace(-bounds[xi], bounds[xi], NX)
-	y = np.linspace(-bounds[yi], bounds[yi], NY)
+	try:
+		bounds[0][0]
+		min_bounds = bounds[0]
+		max_bounds = bounds[1]
+	except:
+		min_bounds = -np.array(bounds)
+		max_bounds = bounds
+
+	# print("bounds =", min_bounds, max_bounds)
+
+	x = np.linspace(min_bounds[xi], max_bounds[xi], NX)
+	y = np.linspace(min_bounds[yi], max_bounds[yi], NY)
 	X, Y = np.meshgrid(x, y)
 	Z = np.zeros_like(X)
 
@@ -152,7 +162,10 @@ def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None,
 			Z[j, i] = fn_to_plot(state)
 				
 
-	im = ax.contourf(X, Y, Z)
+	if levels is None:
+		im = ax.contourf(X, Y, Z)
+	else:
+		im = ax.contourf(X, Y, Z, levels=levels)
 	ax.set_xlabel(VAR_STR[xi])
 	ax.set_ylabel(VAR_STR[yi])
 	
@@ -165,6 +178,8 @@ def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None,
 	if pi_multiples:
 		if xi == 2: axis_pi_multiples(ax.xaxis)
 		if yi == 2: axis_pi_multiples(ax.yaxis)
+
+	return X, Y, Z, ax, cb 
 
 
 
@@ -293,3 +308,18 @@ def axis_pi_multiples(axis_obj):
 	axis_obj.set_major_locator(plt.MultipleLocator(np.pi / 2))
 	axis_obj.set_minor_locator(plt.MultipleLocator(np.pi / 12))
 	axis_obj.set_major_formatter(plt.FuncFormatter(multiple_formatter()))
+
+
+
+
+import dill
+def save_model_function(fn, fname):
+	with open("../saved/" + fname, "wb") as file:
+		s = dill.dump(fn, file)
+
+def load_model_function(fname):
+	with open("../saved/" + fname, "rb") as file:
+		return dill.load(file)
+
+
+

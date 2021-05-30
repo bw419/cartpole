@@ -62,7 +62,7 @@ def linear_fit(N=1024, t_step=0.2, sobol=True, get_saved=False, save=False, fnam
 	if save:
 		print("Saving data.")
 		to_save = (X, Y, C)
-		np.save("../" + fname + ".npy", to_save)
+		np.save("../saved/" + fname + ".npy", to_save)
 
 	if return_data:
 		return X, Y, C
