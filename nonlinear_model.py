@@ -383,7 +383,6 @@ def parameter_optimisation():
 
 	print(optima)
 	params = optima
-	print()
 
 
 
@@ -412,3 +411,34 @@ if __name__ == "__main__":
 				ax[i][j].set_ylim([-P_RANGE[i], 2*P_RANGE[i]])
 
 		plt.show()
+
+
+
+
+	# saving of models and comparison of execution speeds
+
+	# a= [load_model_function("nonlin_13_11"),
+	#  load_model_function("nonlin_16_12"),
+	# load_model_function("nonlin_15_13"),
+	# single_action5a,
+	# single_action5]
+	# for modelf in a:
+	# 	t = time.perf_counter()
+	# 	for i in range(1000):
+	# 		modelf(rand_state5())
+	# 	print(time.perf_counter() - t)
+
+	# model_fn = get_good_nonlinear_fit(speed_tradeoff=True)
+	# model_fn = get_good_nonlinear_fit(speed_tradeoff=False)
+	# model_fn = get_nonlinear_fit(2**13, 2**11)
+	# save_model_function(model_fn, "nonlin_13_11")
+	# model_fn = get_nonlinear_fit(2**15, 2**13)
+	# save_model_function(model_fn, "nonlin_15_13")
+	# model_fn = get_nonlinear_fit(2**16, 2**12)
+	# save_model_function(model_fn, "nonlin_16_12")
+	# model_fn = get_nonlinear_fit(2**16, 2**14)
+	# save_model_function(model_fn, "nonlin_16_14")
+	# model_fn = get_nonlinear_fit(2**18, 2**16)
+	# save_model_function(model_fn, "nonlin_18_16")
+
+	# exit()

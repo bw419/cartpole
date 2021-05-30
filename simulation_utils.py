@@ -283,7 +283,11 @@ def plot_states(states, actions=None, ax=None):
 	ax1 = ax.twinx()
 	p = ax1.plot(T, states[:,4], label=VAR_STR[4], c="tab:purple")
 	ax1.plot(T, states[:,4], lw=0, c=p[0].get_color(), marker="s", ms=3, mew=1, mec="k", mfc=p[0].get_color())
-
+	
+	max_var = np.max(np.abs(states[:,:4]))
+	ax.set_ylim([-max_var, max_var])
+	max_f = np.max(np.abs(states[:,4]))
+	ax1.set_ylim([-max_f, max_f])
 
 	if standalone_fig:
 		plt.gcf().set_size_inches((4.8, 4.0))

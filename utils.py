@@ -314,12 +314,15 @@ def axis_pi_multiples(axis_obj):
 
 import dill
 def save_model_function(fn, fname):
+	print("saving model...")
 	with open("../saved/" + fname, "wb") as file:
 		s = dill.dump(fn, file)
+	print("saved.")
 
 def load_model_function(fname):
+	print("loading model...")
 	with open("../saved/" + fname, "rb") as file:
-		return dill.load(file)
-
-
+		f = dill.load(file)
+		print("loaded")
+	return f
 

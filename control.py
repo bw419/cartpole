@@ -6,19 +6,9 @@ from nonlinear_model import *
 import collections
 from time import perf_counter
 
-# model_fn = get_good_nonlinear_fit(speed_tradeoff=True)
 
-# model_fn = get_good_nonlinear_fit(speed_tradeoff=False)
-model_fn = get_nonlinear_fit(2**13, 2**11)
-save_model_function(model_fn, "nonlin_13_11")
-model_fn = get_nonlinear_fit(2**15, 2**13)
-save_model_function(model_fn, "nonlin_15_13")
-model_fn = get_nonlinear_fit(2**16, 2**14)
-save_model_function(model_fn, "nonlin_15_13")
-model_fn = get_nonlinear_fit(2**18, 2**16)
-save_model_function(model_fn, "nonlin_15_13")
-
-exit()
+model_fn = load_model_function("nonlin_15_13")
+# model_fn = load_model_function("nonlin_16_12")
 update_fn = to_update_fn_w_action(model_fn)
 
 
@@ -26,10 +16,16 @@ update_fn = to_update_fn_w_action(model_fn)
 loss_sig = np.array([.5, .5, .5, .5])
 # loss_sig = np.array([5, .5, 1e4, 1e4])
 
+loss_fn = lambda x: 1-np.exp(-(
+	np.square((x[0])*INV_SQRT2/loss_sig[0]) +
+	np.square((x[1])*INV_SQRT2/loss_sig[1]) +
+	np.square(np.sin(.5*x[2])*INV_SQRT2/loss_sig[2]) +
+	np.square((x[3])*INV_SQRT2/loss_sig[3])
+))
+
 # loss function given a state vector. the elements of the state vector are
-def loss_fn(state):
-	state[3] = remap_angle(state[3])
-	return 1 - np.exp(-np.sum((state[:4]**2)/loss_sig**2)/2)
+# def loss_fn(state):
+	# return 1 - np.exp(-np.sum((remapped_angle(state[:4])**2)/loss_sig**2)/2)
 
 
 def policy_loss(IC, update_fn, policy_fn, max_it, stop_early=True):
@@ -83,7 +79,7 @@ def policy_simulation(IC, update_fn, policy_fn, max_it, stop_early=True):
 
 
 def linear_policy(P, state):
-	return np.dot(P, [state[0], state[1], remap_angle(state[2]), state[3]])
+	return np.dot(P, remapped_angle(state))
 
 def linear_loss(P, IC, update_fn, loss_window=5):
 	return policy_loss(IC, update_fn, lambda state: linear_policy(P, state), loss_window)
@@ -118,9 +114,9 @@ if __name__ == "__main__":
 
 	def quick_policy_sim(P, IC):
 		fig, ax = plt.subplots(1, 2)
-		states, actions, L = policy_simulation(IC, single_action, lambda state: linear_policy(P, state), 50, stop_early=False)
+		states, actions, L = policy_simulation(IC, single_action, lambda state: linear_policy(P, state), 100, stop_early=True)
 		plot_states(states, actions, ax=ax[0])
-		states, actions, L = policy_simulation(IC, update_fn, lambda state: linear_policy(P, state), 50, stop_early=False)
+		states, actions, L = policy_simulation(IC, update_fn, lambda state: linear_policy(P, state), 100, stop_early=True)
 		plot_states(states, actions, ax=ax[1])
 		plt.title(f"Loss={L}")
 		plt.show()
@@ -136,7 +132,7 @@ if __name__ == "__main__":
 
 	loss_sig = np.array([1, 5, 1, 5])
 	while True:
-		quick_policy_sim(ALL_P, [.1, .1, .1, .1]*rand_state4())
+		quick_policy_sim(ALL_P, [.1, .1, .1, .1]*rand_state4() + [0, 0, 2*np.pi, 0])
 
 
 	print("doing a contour plot")

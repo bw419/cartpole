@@ -236,6 +236,10 @@ def remap_angle(theta):
   
 remap_angle_v = np.vectorize(remap_angle)
 
+def remapped_angle(state):
+	return np.concatenate((state[:2], [remap_angle(state[2])], state[3:]))
+
+
 # # If theta  has gone past our conceptual limits of [-pi,pi]
 # # map it onto the equivalent angle that is in the accepted range (by adding or subtracting 2pi)
 # def remap_angle(theta):
