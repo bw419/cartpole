@@ -1,6 +1,7 @@
 from globals import *
 from model import *
 from rollout_utils import *
+import visvis as vv
 
 
 def plot_energy():

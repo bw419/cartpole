@@ -69,6 +69,14 @@ class CartPole:
 			return [T, V]
 		return get_state_energy(state)
 
+	def getPoleEnergy(self, custom_params=False):
+		state = self.getState()
+		if custom_params:
+			V = 0.5 * self.pole_length * self.gravity * self.pole_mass * (np.cos(state[2]) - 1)
+			T = (0.5 * self.pole_mass / 3) * (self.pole_length * state[3])**2
+			return T + V
+		return get_state_energy(state)
+
 	def getState(self, energy=False):
 		if not energy:
 			return np.array([self.cart_location,self.cart_velocity,self.pole_angle,self.pole_velocity])
@@ -88,7 +96,7 @@ class CartPole:
 		force = self.max_force * np.tanh(action/self.max_force)
 
 		# integrate forward the equations of motion using the Euler method
-		for step in range(self.sim_steps):
+		for step in range(50):#self.sim_steps):
 			s = np.sin(self.pole_angle)
 			c = np.cos(self.pole_angle)
 			m = 4.0*(self.cart_mass+self.pole_mass)-3.0*self.pole_mass*(c**2)
@@ -101,7 +109,6 @@ class CartPole:
 				6.0*(self.cart_mass+self.pole_mass)/(self.pole_mass*self.pole_length)*\
 				(self.pole_mass*self.gravity*s - 2.0/self.pole_length*self.mu_p*self.pole_velocity) \
 				)/m
-
 
 
 			# Update state variables
@@ -209,6 +216,7 @@ def single_action(state4, action, t_step=0.2):
 	return np.array(sys.getState())
 
 
+
 # Target function - the change in a set of state variables over the timestep
 
 def target(state, t_step=0.2):
@@ -291,3 +299,58 @@ def get_tot_state_energy(state):
 	T += (0.0625 / 3) * (state[3])**2
 	return T+V
 
+def get_tot_pole_energy(state):
+	return 0.125 * 9.8 * (np.cos(state[2]) - 1) + (0.0625 / 3) * (state[3])**2
+
+
+
+
+import ctypes
+import pathlib
+from subprocess import Popen, PIPE
+
+fun = ctypes.CDLL("../libfun.so")
+
+out = Popen(
+    args="nm ../libfun.so", 
+    shell=True, 
+    stdout=PIPE
+).communicate()[0].decode("utf-8")
+
+attrs = [
+    i.split(" ")[-1].replace("\r", "") 
+    for i in out.split("\n") if " T " in i
+]
+
+func_names = [func_name for func_name in attrs if hasattr(fun, func_name)]
+funcs = [getattr(fun, func_name) for func_name in func_names]
+
+funcs[0].argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double, ctypes.c_double, ctypes.c_double]
+funcs[1].restype = ctypes.c_double
+funcs[2].restype = ctypes.c_double
+funcs[3].restype = ctypes.c_double
+funcs[4].restype = ctypes.c_double
+
+
+def fast_single_action(state, action):
+	funcs[0](*[ctypes.c_double(x) for x in [state[0], state[1], state[2], state[3], action]])
+	return [x() for x in funcs[1:5]]
+
+
+def single_action_perf_comparison():
+
+	t = time.perf_counter()
+	for i in range(1000):
+		single_action([1.,1.,1.,1.],1.)
+
+	time1 = time.perf_counter() - t
+	t = time.perf_counter()
+
+	for i in range(1000):
+		fast_single_action([1.,1.,1.,1.],1.)
+
+	time2 = time.perf_counter() - t
+
+	print(time1/time2, "times faster")
+
+single_action_perf_comparison()

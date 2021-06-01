@@ -438,7 +438,7 @@ if __name__ == "__main__":
 	# save_model_function(model_fn, "nonlin_16_12")
 	# model_fn = get_nonlinear_fit(2**16, 2**14)
 	# save_model_function(model_fn, "nonlin_16_14")
-	# model_fn = get_nonlinear_fit(2**18, 2**16)
-	# save_model_function(model_fn, "nonlin_18_16")
+	model_fn = get_nonlinear_fit(2**18, 2**14)
+	save_model_function(model_fn, "nonlin_18_16")
 
 	# exit()
