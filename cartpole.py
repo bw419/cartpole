@@ -337,6 +337,13 @@ def fast_single_action(state, action):
 	return [x() for x in funcs[1:5]]
 
 
+def fast_target(state, t_step=0.2):
+	if len(state) == 4:
+		return fast_single_action(state, 0.) - np.array(state)
+	else:
+		return fast_single_action(state[:4], state[5]) - np.array(state[:4])
+
+
 def single_action_perf_comparison():
 
 	t = time.perf_counter()
@@ -353,4 +360,4 @@ def single_action_perf_comparison():
 
 	print(time1/time2, "times faster")
 
-single_action_perf_comparison()
+# single_action_perf_comparison()

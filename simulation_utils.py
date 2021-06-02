@@ -256,7 +256,7 @@ def plot_rollout_comparison(IC, rollout, model_fn, N=50, remap=True, t_step=0.2,
 
 
 # states can be a 4-vector or 5-vector
-def plot_states(states, actions=None, ax=None, show_F=True):
+def plot_states(states, actions=None, ax=None, show_F=True, markers=True):
 	standalone_fig = False
 	if ax is None:
 		ax = plt.gca()
@@ -271,7 +271,9 @@ def plot_states(states, actions=None, ax=None, show_F=True):
 
 	for j in range(4):
 		p = ax.plot(T, states[:,j], label=VAR_STR[j])
-		ax.plot(T, states[:,j], lw=0, c=p[0].get_color(), marker="s", ms=3, mew=1, mec="k", mfc=p[0].get_color())
+		if markers:
+			ax1.plot(T, states[:,4], lw=0, c=p[0].get_color(), marker="s", ms=3, mew=1, mec="k", mfc=p[0].get_color())
+
 
 	#ax.set_title(r"Modelled trajectory"))
 	ax.set_xlabel("Time (s)", labelpad=2.0)
@@ -287,7 +289,8 @@ def plot_states(states, actions=None, ax=None, show_F=True):
 
 		ax1 = ax.twinx()
 		p = ax1.plot(T, states[:,4], label=VAR_STR[4], c="tab:purple")
-		ax1.plot(T, states[:,4], lw=0, c=p[0].get_color(), marker="s", ms=3, mew=1, mec="k", mfc=p[0].get_color())
+		if markers:
+			ax1.plot(T, states[:,4], lw=0, c=p[0].get_color(), marker="s", ms=3, mew=1, mec="k", mfc=p[0].get_color())
 
 		max_f = np.max(np.abs(states[:,4]))
 		ax1.set_ylim([-max_f, max_f])

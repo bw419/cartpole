@@ -7,6 +7,8 @@ import collections
 from time import perf_counter
 
 
+single_action = fast_single_action
+
 model_fn = load_model_function("nonlin_15_13")
 # model_fn = load_model_function("nonlin_16_14")
 learned_update_fn = to_update_fn_w_action(model_fn)
@@ -124,7 +126,7 @@ def policy_simulation(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True
 		if it % 5 == 0 and stop_early:
 			if it % 5 == 0 and np.abs(states[-1][0]) > 3*P_RANGE4[0]:
 				return states, actions, 1.0
-			if stop_early and np.abs(np.sum(losses) - prev_loss) < 0.001:
+			if stop_early and np.abs(np.sum(losses) - prev_loss) < 0.0001:
 				return states, actions, np.sum(losses)/max_it
 			prev_loss = np.sum(losses)
 
@@ -139,10 +141,6 @@ def policy_loss(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True):
 	state = IC
 	L = 0
 	prev_loss = np.inf
-
-	a = 0
-	b = 0
-	c = 0
 	for it in range(max_it):
 
 		L += loss_fn(state)
@@ -153,11 +151,13 @@ def policy_loss(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True):
 		if it % 5 == 0 and stop_early: 
 			if np.abs(state[0]) > 3*P_RANGE4[0]:
 				return 1.0
-			if np.abs(L - prev_loss) < 0.001:
+			if np.abs(L - prev_loss) < 0.0001:
 				return L/max_it
 			prev_loss = L
 
 	return L/max_it
+
+
 
 
 
@@ -187,6 +187,16 @@ def policy_loss_N_runs(IC_gen_fn, loss_fn, update_fn, policy_fn, N_its, N_runs):
 		])/(N_runs)
 
 
+def policy_success(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True):
+	loss = policy_loss(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=stop_early)
+	return loss < 0.1
+
+def policy_success_rate(IC_gen_fn, loss_fn, update_fn, policy_fn, N_its, N_runs):
+	return np.count_nonzero([
+		policy_loss(IC_gen_fn(), loss_fn, update_fn, policy_fn, N_its) < 0.1
+		for i in range(N_runs)
+		])/(N_runs)
+
 # obtain a function mapping policy parameters to a loss value
 def get_policy_loss_fn(IC_gen_fn, loss_sig, model_fn, N_runs, N_its, which="linear"):
 	if which == "linear":
@@ -209,6 +219,8 @@ X_ONLY_P = np.array([-10, -5.5, 0, 0])
 THETA_XDOT_ONLY_P = np.array([0, 1.1, 15, 2.5])
 
 ## LINEAR CONTROLLER ################################################
+## NOISE FREE #######################################################
+## OPTIMISED ON TRUE DYNAMICS #######################################
 ## optimisation results... ##########################################
 # initial manual pick...
 # [.3, .6, 15, 2.5]
@@ -221,9 +233,20 @@ THETA_XDOT_ONLY_P = np.array([0, 1.1, 15, 2.5])
 # [.486, 1.05, 17.6, 2.71] - best, Ns=11
 # next... make N runs=50, N_its=100
 
+# thresholds, starting at [.0, .0, .0, .0] to obtain 90% success:
+# [.4, .3, 18, 1.95] is at the min for each!
+# max_vals  ~ [.4, .8, .3, .5]xP_RANGE
+# 100% success rate over 500 runs & 200 iterations for 32% of max_vals
+
 GOOD_LOSS_SCALES = [5, 5, 1, 5]
-ALL_P = np.array([.49, 1., 17.6, 2.7]) 
+ALL_P = np.array([.4, .3, 18, 1.95]) 
 #####################################################################
+
+# TODO: 
+# - optimise on modelled dynamics
+# - optimise for observation noise
+# - optimise for dynamics noise
+# - optimise for both?
 
 
 
@@ -249,27 +272,27 @@ def optimise_linear_policy(IC_proportions, N_runs=50, N_its=100):
 
 
 
-def linear_policy_contour_plots(IC_proportions=[.1, .1, .1, .1], N_runs=15, N_its=50):
+def linear_policy_contour_plots(IC_proportions=[1., .1, .1, .1], N_runs=15, N_its=50):
 
 	IC_gen_fn = get_IC_gen_fn(IC_proportions)
 
 	start_state = np.zeros(4)
-	for s in np.linspace(0, .8, 1):
+	for s in np.linspace(0.2, 0.6, 1):
+
+		s=.3
 		print("it", s)
 		start_state[0] = s
 		plt.figure()
 		plt.title(f"x = {round(s, 1)}")
 
 
-		# OPTIMISING FOR ONLY THETA, THETA DOT: (ENSURE loss_fn(P) includes x,x dot part, and i.c. range is sensible)
-		policy_loss_fn = get_policy_loss_fn(IC_gen_fn, [1e6, 1e6, 1, 5], single_action, N_runs, N_its, which="linear")
-		contour_plot(policy_loss_fn, start_state=start_state, bounds=[[0, 0, 0, -3], [0, 0, 30, 7]], xi=2, yi=3, NX=10, NY=20, incl_f=False, pi_multiples=False)
-		plt.show()
+		# # OPTIMISING FOR ONLY THETA, THETA DOT: (ENSURE loss_fn(P) includes x,x dot part, and i.c. range is sensible)
+		# policy_loss_fn = get_policy_loss_fn(IC_gen_fn, [1e6, 1e6, 1, 5], single_action, N_runs, N_its, which="linear")
+		# contour_plot(policy_loss_fn, start_state=start_state, bounds=[[0, 0, 0, -3], [0, 0, 30, 7]], xi=2, yi=3, NX=10, NY=20, incl_f=False, pi_multiples=False)
 
-		# OPTIMISING FOR FIRST 3:
-		policy_loss_fn = get_policy_loss_fn(IC_gen_fn, [1e6, 5, 1, 5], single_action, N_runs, N_its, which="linear")
-		contour_plot(policy_loss_fn, start_state=start_state, bounds=[[0, -1.0, 0, .7], [0, 2.5, 0, 4.3]], xi=1, yi=3, NX=15, NY=15, incl_f=False, pi_multiples=False, levels=np.linspace(0, 1, 11))
-		plt.show()
+		# # OPTIMISING FOR FIRST 3:
+		# policy_loss_fn = get_policy_loss_fn(IC_gen_fn, [1e6, 5, 1, 5], single_action, N_runs, N_its, which="linear")
+		# contour_plot(policy_loss_fn, start_state=start_state, bounds=[[0, -1.0, 0, .7], [0, 2.5, 0, 4.3]], xi=1, yi=3, NX=15, NY=15, incl_f=False, pi_multiples=False, levels=np.linspace(0, 1, 11))
 	
 
 		## OPTIMISING FOR ALL 4:
@@ -277,22 +300,23 @@ def linear_policy_contour_plots(IC_proportions=[.1, .1, .1, .1], N_runs=15, N_it
 		def modified_loss_fn(P):
 			P[3] = 1.8 + 0.5*P[1]
 			return policy_loss_fn(P)
-		contour_plot(modified_loss_fn, start_state=start_state, bounds=[[0, 0.0, 10, 0], [0, 2.0, 20, 0]], xi=1, yi=2, NX=5, NY=5, incl_f=False, pi_multiples=False, levels=np.linspace(0, 1, 11))
-		plt.show()
+		contour_plot(modified_loss_fn, start_state=start_state, bounds=[[0, 0.0, 10, 0], [0, 2.5, 25, 0]], xi=1, yi=2, NX=10, NY=10, incl_f=False, pi_multiples=False, levels=np.linspace(0, 1, 11))
+	
+	plt.show()
 	
 
 
 
-def quick_linear_policy_sim(P, IC, loss_sig, N_its=50):
+def quick_linear_policy_sim(P, IC, loss_sig, N_its=50, markers=False):
 	fig, ax = plt.subplots(1, 2)
 
 	loss_fn = get_loss_fn(loss_sig)
 	policy_fn = get_policy_fn(P, which="linear")
 
 	states, actions, L = policy_simulation(IC, loss_fn, single_action, policy_fn, N_its, stop_early=True)
-	plot_states(states, actions, ax=ax[0], show_F=False)
+	plot_states(states, actions, ax=ax[0], show_F=False, markers=markers)
 	states, actions, L = policy_simulation(IC, loss_fn, learned_update_fn, policy_fn, N_its, stop_early=True)
-	plot_states(states, actions, ax=ax[1], show_F=False)
+	plot_states(states, actions, ax=ax[1], show_F=False, markers=markers)
 	plt.title(f"Loss={L}")
 	plt.show()
 
@@ -309,15 +333,33 @@ if __name__ == "__main__":
 	# print(loss_fn([.5, 1.8, 16, 3.]))
 	# print(time.perf_counter() -t)
 
-	def rand_quick_runs():
+	def rand_quick_runs(P=ALL_P, IC_props=[.1,.1,.1,.1]):
 		while True:
-			quick_linear_policy_sim(ALL_P, get_IC_gen_fn([.1, .1, .1, .1])(), GOOD_LOSS_SCALES, 50)
+			quick_linear_policy_sim(P, get_IC_gen_fn(IC_props)(), GOOD_LOSS_SCALES, 500)
 
-	# rand_quick_runs()
 
+	# IC_PROPS = np.array([.0, .0, .0, .5])
+
+	def quick_success_rate(P, IC_props=[.1,.1,.1,.1]):
+		loss_fn = get_loss_fn(GOOD_LOSS_SCALES)
+		policy_fn = get_policy_fn(P, which="linear")
+		s = policy_success_rate(get_IC_gen_fn(IC_props), loss_fn, single_action, policy_fn, 300, 500)
+		print(s)
+
+
+
+	IC_PROPS = np.array([.4, .8, .3, .5])
+
+	rand_quick_runs([.4, .3, 18, 1.95], 0.33*IC_PROPS)
+
+
+
+	# for x in np.linspace(.3, .5, 25):
+	# 	quick_success_rate([.4, .3, 18, 1.8 + 0.5*.3], x*IC_PROPS)
+	# 	print("- ", x)
 
 	print("doing contour plots")
-	linear_policy_contour_plots(IC_proportions=[.1, .1, .1, .1], N_runs=15, N_its=50)
+	linear_policy_contour_plots(IC_proportions=IC_PROPS, N_runs=15, N_its=200)
 
 
 	plt.show()

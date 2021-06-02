@@ -2,37 +2,45 @@ from globals import *
 from utils import *
 from cartpole import *
 
-counter = 0
 
-def linear_training_data(N=512, t_step=0.2, sobol=True, incl_f=True):
+def linear_training_data(N=512, t_step=0.2, sobol=True, incl_f=True, obs_noise=None, obs_bias=None, dyn_noise=None, dyn_bias=None):
 
-	Y = np.zeros((N,4))
-	if incl_f:
-		X = np.zeros((N,5))
-	else:
-		X = np.zeros((N,4))
-
-	global counter
+	N_X_cmpts = 5 if incl_f else 4
+	if obs_noise is None:
+		obs_noise = np.zeros(N_X_cmpts)
+	if obs_bias is None:
+		obs_bias = np.zeros(N_X_cmpts)
+	Y = np.zeros((N, 4))
+	X = np.zeros((N, N_X_cmpts))
 
 	if sobol:
 		sobol_init()
 
 	for i in range(N):
 		if sobol:
-			if incl_f: 
-				X[i,:] = 1.*sobol_rand_state5(TRAIN_P_RANGE5)
-			else: 
-				X[i,:] = 1.*sobol_rand_state4(TRAIN_P_RANGE4)
+			X[i,:] = 1.*sobol_rand_state5(TRAIN_P_RANGE5)[:N_X_cmpts]
 		else:
-			if incl_f: 
-				X[i,:] = 1.*rand_state5(TRAIN_P_RANGE5)
-			else: 
-				X[i,:] = 1.*rand_state4(TRAIN_P_RANGE4)
+			X[i,:] = 1.*rand_state5(TRAIN_P_RANGE5)[:N_X_cmpts]
 
 		Y[i,:] = target(X[i, :], t_step)
 
+	obs_noise = [.1, .2, .3, .4, .5]
+	obs_bias = [5, 4, 3, 2, 1]
+
+	# add observation noise/bias
+	obs_noise = np.array(obs_noise)
+	obs_bias = np.array(obs_bias)
+
+	X += np.random.normal(loc=obs_bias, scale=obs_noise, size=(N, N_X_cmpts))
+	Y += np.random.normal(loc=obs_bias[:4], scale=obs_noise[:4], size=(N, 4))
+
 	return X, Y
 
+
+
+print(linear_training_data(N=3, incl_f=True)[0])
+
+exit()
 
 # enforces lack of dependence on theta or x
 def linear_fit(N=1024, t_step=0.2, sobol=True, get_saved=False, save=False, fname="lin_train", return_data=False, incl_f=True, enforce_constraints=True):
