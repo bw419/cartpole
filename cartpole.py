@@ -307,33 +307,40 @@ def get_tot_pole_energy(state):
 
 import ctypes
 import pathlib
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, run
 
-fun = ctypes.CDLL("../libfun.so")
 
-out = Popen(
-    args="nm ../libfun.so", 
-    shell=True, 
-    stdout=PIPE
-).communicate()[0].decode("utf-8")
+funcs = []
 
-attrs = [
-    i.split(" ")[-1].replace("\r", "") 
-    for i in out.split("\n") if " T " in i
-]
+def intialise_cfuncs():
+	global funcs
 
-func_names = [func_name for func_name in attrs if hasattr(fun, func_name)]
-funcs = [getattr(fun, func_name) for func_name in func_names]
+	fun = ctypes.CDLL("../libfun.so")
 
-funcs[0].argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double, ctypes.c_double, ctypes.c_double]
-funcs[1].restype = ctypes.c_double
-funcs[2].restype = ctypes.c_double
-funcs[3].restype = ctypes.c_double
-funcs[4].restype = ctypes.c_double
+	out = Popen(
+	    args="nm ../libfun.so", 
+	    shell=True, 
+	    stdout=PIPE
+	).communicate()[0].decode("utf-8")
+
+	attrs = [
+	    i.split(" ")[-1].replace("\r", "") 
+	    for i in out.split("\n") if " T " in i
+	]
+
+	func_names = [func_name for func_name in attrs if hasattr(fun, func_name)]
+	funcs = [getattr(fun, func_name) for func_name in func_names]
+
+	funcs[0].argtypes = [ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
+	funcs[1].restype = ctypes.c_float
+	funcs[2].restype = ctypes.c_float
+	funcs[3].restype = ctypes.c_float
+	funcs[4].restype = ctypes.c_float
+
 
 
 def fast_single_action(state, action):
-	funcs[0](*[ctypes.c_double(x) for x in [state[0], state[1], state[2], state[3], action]])
+	funcs[0](*[ctypes.c_float(x) for x in [state[0], state[1], state[2], state[3], action]])
 	return [x() for x in funcs[1:5]]
 
 
@@ -341,10 +348,13 @@ def fast_target(state, t_step=0.2):
 	if len(state) == 4:
 		return fast_single_action(state, 0.) - np.array(state)
 	else:
-		return fast_single_action(state[:4], state[5]) - np.array(state[:4])
+		return fast_single_action(state[:4], state[4]) - np.array(state[:4])
 
 
 def single_action_perf_comparison():
+
+	print(single_action([1.,1.,1.,1.],1.))
+	print(fast_single_action([1.,1.,1.,1.],1.))
 
 	t = time.perf_counter()
 	for i in range(1000):
@@ -360,4 +370,12 @@ def single_action_perf_comparison():
 
 	print(time1/time2, "times faster")
 
-# single_action_perf_comparison()
+
+if __name__ == "__main__":
+	print("recompiling c.")
+	run(["cc", "-shared", "-o", "../libfun.so", "../cfuncs.cpp"])
+	intialise_cfuncs()
+	single_action_perf_comparison()
+
+else:
+	intialise_cfuncs()

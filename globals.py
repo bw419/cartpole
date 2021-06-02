@@ -2,7 +2,7 @@ import random
 from mpl_toolkits import mplot3d
 from matplotlib import patches
 from matplotlib import cm
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import ListedColormap, Normalize, LogNorm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import autograd.numpy as np
 from matplotlib.pyplot import ion, draw, Rectangle, Line2D

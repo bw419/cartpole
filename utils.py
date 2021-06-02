@@ -120,6 +120,81 @@ def sobol_rand_state5(bounds=None):
 #########################################################
 
 
+
+def variable_scan(idx, N, bound=None, start=None):
+
+	if bound is None:
+		bound = P_RANGE5[idx]
+
+	try:
+		bound[0]
+		min_bound = bound[0]
+		max_bound = bound[1]
+	except:
+		min_bound = -bound
+		max_bound = bound
+
+
+	if start is None:
+		start = rand_state5()
+	else:
+		start = np.array(start)
+
+	state = start.copy()
+	for i, scan_val in enumerate(np.linspace(min_bound, max_bound, N)):
+		state[idx] = scan_val
+		yield i, state
+
+def variable_scan_2d(idx1, idx2, N1, N2, bound1=None, bound2=None, start=None):
+
+	if bound1 is None:
+		bound1 = P_RANGE5[idx]
+
+	if bound2 is None:
+		bound2 = P_RANGE5[idx]
+
+	try:
+		bound1[0]
+		min_bound1 = bound1[0]
+		max_bound1 = bound1[1]
+	except:
+		min_bound1 = -bound1
+		max_bound1 = bound1
+
+	try:
+		bound1[0]
+		min_bound2 = bound2[0]
+		max_bound2 = bound2[1]
+	except:
+		min_bound2 = -bound2
+		max_bound2 = bound2
+
+
+	if start is None:
+		start = rand_state5()
+	else:
+		start = np.array(start)
+
+	state = start.copy()
+	for i, scan_val1 in enumerate(np.linspace(min_bound1, max_bound1, N1)):
+		state[idx1] = scan_val1
+		for j, scan_val2 in enumerate(np.linspace(min_bound2, max_bound2, N2)):
+			state[idx2] = scan_val2
+			yield i, j, state
+
+
+
+def function_scan(fn, idx, N, bound=None, start=None):
+	temp = [tup for tup in variable_scan(idx, N, bound, start)]
+	return [state[idx] for i, state in x], [fn(state) for i, state in x]
+
+
+
+
+##########################################################
+
+
+# can be changed to use variable_scan_2d
 def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None, NX=50, NY=50, NS=8, ax=None, incl_f=True, pi_multiples=True, levels=None):
 
 	if ax is None:
@@ -185,26 +260,20 @@ def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None,
 
 def line_plot(fn_to_plot, start_state=None, bounds=None, xi=2, NX=50, ax=None, incl_f=True):
 
+	N_X_cmpts = 5 if incl_f else 4
+
+	if start_state is None:
+		start_state = np.zeros(N_X_cmpts)
+
 	if ax is None:
 		ax = plt.gca()
 
-	if bounds is None:
-		if incl_f:
-			bounds = P_RANGE5
-		else:
-			bounds = P_RANGE4
 
-	x = np.linspace(-bounds[xi], bounds[xi], NX)
-	z = np.zeros_like(x)
+	x = np.zeros(NX)
+	z = np.zeros(NX)
 
-	if start_state is None:
-		start_state = np.zeros(len(bounds))
-
-	for i, x_val in enumerate(x):
-
-		state = start_state
-		state[xi] = x_val
-
+	for i, state in variable_scan(xi, NX, bounds, start_state):
+		x[i] = state[xi]
 		z[i] = fn_to_plot(state)
 				
 
@@ -212,6 +281,58 @@ def line_plot(fn_to_plot, start_state=None, bounds=None, xi=2, NX=50, ax=None, i
 	ax.set_xlabel(VAR_STR[xi])
 	
 	if xi == 2: axis_pi_multiples(ax.xaxis)
+
+
+
+
+def plot_scan_matrix(fn_to_plot, N=50, start_state=None, axs_in=None, **kwargs):
+
+	if start_state is None:
+		start_state = rand_state5()
+
+	if axs_in is None:
+		fig, axs = plt.subplots(4, 5)
+	else:
+		axs = axs_in
+
+
+	for i in range(5):
+		x = np.zeros(N)
+		y = np.zeros((N, 4))
+		for j, state in variable_scan(i, N, start=start_state):
+			x[j] = state[i]
+			y[j,:] = fn_to_plot(state)
+
+		for j in range(4):
+			ax = axs[j][i]
+
+			if "fmt" in kwargs:
+				kwargs1 = kwargs.copy()
+				del kwargs1["fmt"]
+				ax.plot(x, y[:,j], kwargs["fmt"], **kwargs1)
+			else:
+				ax.plot(x, y[:,j], **kwargs)
+			
+
+			if axs_in is None:
+				ax.set_ylim([-20, 20])
+
+				if j == 3:
+					ax.set_xlabel(VAR_STR[i])
+				else:
+					ax.tick_params(bottom=False, which="both", labelbottom=False)
+
+				if i == 0:
+					ax.set_ylabel(VAR_STR[j])
+				else:
+					ax.tick_params(left=False, which="both", labelleft=False)
+				
+				if i == 2: 
+					axis_pi_multiples(ax.xaxis, minor=False)
+
+	return axs
+
+
 
 
 def show_matrix(M, zero_range = 0, title="", x="", y="", axes=True, div=True, cmap_str=None):
@@ -304,9 +425,13 @@ class Multiple:
 
 
 
-def axis_pi_multiples(axis_obj):
-	axis_obj.set_major_locator(plt.MultipleLocator(np.pi / 2))
-	axis_obj.set_minor_locator(plt.MultipleLocator(np.pi / 12))
+def axis_pi_multiples(axis_obj, minor=True):
+	if minor:
+		axis_obj.set_major_locator(plt.MultipleLocator(np.pi / 2))
+		axis_obj.set_minor_locator(plt.MultipleLocator(np.pi / 12))
+	else:
+		axis_obj.set_major_locator(plt.MultipleLocator(np.pi))
+
 	axis_obj.set_major_formatter(plt.FuncFormatter(multiple_formatter()))
 
 

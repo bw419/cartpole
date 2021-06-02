@@ -3,13 +3,10 @@ from utils import *
 from cartpole import *
 
 
-def linear_training_data(N=512, t_step=0.2, sobol=True, incl_f=True, obs_noise=None, obs_bias=None, dyn_noise=None, dyn_bias=None):
+def target_training_data(N=512, t_step=0.2, sobol=True, incl_f=True):
 
 	N_X_cmpts = 5 if incl_f else 4
-	if obs_noise is None:
-		obs_noise = np.zeros(N_X_cmpts)
-	if obs_bias is None:
-		obs_bias = np.zeros(N_X_cmpts)
+
 	Y = np.zeros((N, 4))
 	X = np.zeros((N, N_X_cmpts))
 
@@ -22,41 +19,40 @@ def linear_training_data(N=512, t_step=0.2, sobol=True, incl_f=True, obs_noise=N
 		else:
 			X[i,:] = 1.*rand_state5(TRAIN_P_RANGE5)[:N_X_cmpts]
 
-		Y[i,:] = target(X[i, :], t_step)
-
-	obs_noise = [.1, .2, .3, .4, .5]
-	obs_bias = [5, 4, 3, 2, 1]
-
-	# add observation noise/bias
-	obs_noise = np.array(obs_noise)
-	obs_bias = np.array(obs_bias)
-
-	X += np.random.normal(loc=obs_bias, scale=obs_noise, size=(N, N_X_cmpts))
-	Y += np.random.normal(loc=obs_bias[:4], scale=obs_noise[:4], size=(N, 4))
+		Y[i,:] = fast_target(X[i, :], t_step)
 
 	return X, Y
 
 
+def corrupt(X, Y, obs_noise=None, obs_bias=None, dyn_noise=None, dyn_bias=None):
 
-print(linear_training_data(N=3, incl_f=True)[0])
+	N_X_cmpts = X.shape[1]
 
-exit()
+	if obs_noise is None:
+		obs_noise = np.zeros(N_X_cmpts)
+	if obs_bias is None:
+		obs_bias = np.zeros(N_X_cmpts)
+
+	if obs_bias is not None or obs_noise is not None:
+
+		obs_noise = np.array(obs_noise)
+		obs_bias = np.array(obs_bias)
+
+		noisy_X = X + np.random.normal(loc=obs_bias, scale=obs_noise, size=X.shape)
+		noisy_Y = Y + np.random.normal(loc=obs_bias[:4], scale=obs_noise[:4], size=Y.shape)
+
+	return noisy_X, noisy_Y
+
+
 
 # enforces lack of dependence on theta or x
-def linear_fit(N=1024, t_step=0.2, sobol=True, get_saved=False, save=False, fname="lin_train", return_data=False, incl_f=True, enforce_constraints=True):
+def linear_fit(N=1024, t_step=0.2, sobol=True, return_data=False, incl_f=True, enforce_constraints=True, obs_noise=None, obs_bias=None, dyn_noise=None, dyn_bias=None):
 	
-	if get_saved and not save:
-		from_save = np.load("../" + fname + ".npy", allow_pickle=True)
-		X, Y, C = from_save
-
-		if len(X) == N and X.shape[1]//5 == incl_f: # AND MATCHING INCLUSION OF FORCE
-			print("Retrieving saved data.")
-			return X, Y, C
-		else:
-			print("Saved data does not have requested size!")
-
-	X, Y = linear_training_data(N, t_step, sobol, incl_f=incl_f)
+	X, Y = target_training_data(N, t_step, sobol, incl_f)
 	C = np.zeros((4, X.shape[1]))
+
+	nX, nY = corrupt(X, Y, obs_noise, obs_bias, dyn_noise, dyn_bias)
+
 
 	nonzero_cols = (1,3)
 	if incl_f:
@@ -64,52 +60,23 @@ def linear_fit(N=1024, t_step=0.2, sobol=True, get_saved=False, save=False, fnam
 	if not enforce_constraints:
 		nonzero_cols = np.arange(X.shape[1])
 
-	CT, res, rank, s = np.linalg.lstsq(X[:,nonzero_cols], Y, rcond=None)
+	CT, res, rank, s = np.linalg.lstsq(nX[:,nonzero_cols], nY, rcond=None)
 	C[:,nonzero_cols] = CT.T
 
-	if save:
-		print("Saving data.")
-		to_save = (X, Y, C)
-		np.save("../saved/" + fname + ".npy", to_save)
-
 	if return_data:
-		return X, Y, C
+		return (X, Y, nX, nY), C
 	else:
 		return C
 
 
 
-# def linear_fit_2(N=512, t_step=0.2, sobol=True, get_saved=True, save=False, fname="lin_train", return_data=False, enforce_constraints=True):
-	
-# 	if get_saved and not save:
-# 		from_save = np.load("../" + fname + ".npy", allow_pickle=True)
-# 		X, Y, C = from_save
-
-# 		if len(X) == N:
-# 			print("Retrieving saved data.")
-# 			return X, Y, C
-# 		else:
-# 			print("Saved data does not have requested size!")
-
-# 	X, Y = linear_training_data(N, t_step, sobol)
-# 	CT, res, rank, s = np.linalg.lstsq(X, Y, rcond=None)
-# 	C = CT.T
-
-# 	if save:
-# 		print("Saving data.")
-# 		to_save = (X, Y, C)
-# 		np.save("../" + fname + ".npy", to_save)
-
-# 	if return_data:
-# 		return X, Y, C
-# 	else:
-# 		return C
 
 
 
+# Noiseless case
 def get_good_linear_fit(return_data=False, enforce_constraints=True, incl_f=True):
 	if return_data:
-		X, Y, C = linear_fit(N=2**12, return_data=True, enforce_constraints=enforce_constraints, incl_f=incl_f)
+		data, C = linear_fit(N=2**12, return_data=True, enforce_constraints=enforce_constraints, incl_f=incl_f)
 	else:
 		C = linear_fit(N=2**12, return_data=False, enforce_constraints=enforce_constraints, incl_f=incl_f)
 
@@ -117,14 +84,25 @@ def get_good_linear_fit(return_data=False, enforce_constraints=True, incl_f=True
 		return C @ x
 
 	if return_data:
-		return fn, X, Y
+		return fn, data[0], data[1]
 	else:
 		return fn
 
 
 
+def get_good_noisy_linear_fit(noise_fraction, N=2**12, incl_f=True):
 
-def lin_model_convergence():
+	C =  linear_fit(N=N, return_data=False, sobol=True, incl_f=incl_f, enforce_constraints=False,
+					obs_noise=noise_fraction*P_RANGE5, obs_bias=None, dyn_noise=None, dyn_bias=None)
+
+	def fn(x):
+		return C @ x
+
+	return fn
+
+
+
+def lin_model_convergence(**kwargs):
 	
 	X = np.power(10, np.linspace(1, 3.5, 100))
 	C = np.zeros((len(X), 16))
@@ -133,7 +111,7 @@ def lin_model_convergence():
 	print(X)
 
 	for i, n in enumerate(X):
-		C = linear_fit(int(n))
+		C = linear_fit(int(n), **kwargs)
 		# print(C)
 		y[i] = np.linalg.norm(C, "fro")
 		print(i, y[i])
@@ -142,23 +120,60 @@ def lin_model_convergence():
 
 	plt.semilogx()
 	# plt.gca().set_xticks(X)
-	plt.scatter(X, y, marker="x")
+	plt.scatter(X, y, marker="x", s=10)
 	plt.plot([500, 500], [0, max(y)], "r--")
 	plt.title("Frobenius norm of C for N\nrandomly drawn training states")
 	plt.ylabel("Norm")
 	plt.xlabel("N", labelpad=2.0)
+
+
+# seems kind of unchanged?
+def convergences():
+	plt.figure()
+	lin_model_convergence(return_data=False, sobol=False, incl_f=True)
+	lin_model_convergence(return_data=False, sobol=False, incl_f=True,
+							obs_noise=0.2*P_RANGE5, obs_bias=None, dyn_noise=None, dyn_bias=None)
+	lin_model_convergence(return_data=False, sobol=False, incl_f=True,
+							obs_noise=0.4*P_RANGE5, obs_bias=None, dyn_noise=None, dyn_bias=None)
 	plt.show()
+
+
+
 
 
 if __name__ == "__main__":
 
-	X, Y, C = linear_fit(N=2048, return_data=True, get_saved=False, sobol=False, incl_f=True)
-	print(C)
+	data, C1 = linear_fit(N=2048, return_data=True, sobol=True, incl_f=True)
+	print("------")
+	print(C1)
+
+	data, C2 = linear_fit(N=2048, return_data=True, sobol=True, incl_f=True, enforce_constraints=False,
+							obs_noise=0.1*P_RANGE5, obs_bias=None, dyn_noise=None, dyn_bias=None)
+	print(C2)
+	print("------")
+
+
+	X, Y, Xn, Yn = data
+
+	# convergences()
 
 	for k in range(4):
-		contour_plot(lambda x: (target(x))[k], incl_f=True, NX=50, xi=2, yi=4)
+		plt.figure()
+		contour_plot(lambda x: (fast_target(x))[k], incl_f=True, NX=50, xi=2, yi=4)
 		plt.title(VAR_STR[k] + " before fit")
-		plt.show()
-		contour_plot(lambda x: (target(x) - C @ x)[k], incl_f=True, NX=50, xi=2, yi=4)
+
+		print("------")
+		print(Xn[:,k])
+		print("------")
+		print(Yn[:,k])
+
+
+
+		plt.figure()
+		contour_plot(lambda x: (fast_target(x) - C1 @ x)[k], incl_f=True, NX=50, xi=2, yi=4)
+		plt.title(VAR_STR[k] + " after fit")
+
+		plt.figure()
+		contour_plot(lambda x: (fast_target(x) - C2 @ x)[k], incl_f=True, NX=50, xi=2, yi=4)
 		plt.title(VAR_STR[k] + " after fit")
 		plt.show()

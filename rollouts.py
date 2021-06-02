@@ -2,8 +2,9 @@ from globals import *
 from utils import *
 from simulation_utils import *
 from cartpole import *
-from linear_model import get_good_linear_fit
-from nonlinear_model import get_nonlinear_fit, get_good_nonlinear_fit
+from linear_model import *
+from nonlinear_model import *
+
 
 
 
@@ -79,11 +80,6 @@ def cart_waveforms():
 
 
 
-# from main import *
-# C = np.load("../lin_model.npy")
-# print(C)
-# exit()
-# C = np.load("../lin_model1.npy")
 
 
 def time_until_mismatch_plot(model_update_fn, max_it=100, oscillations=False, N_trials=500, ax=None):
@@ -177,36 +173,57 @@ def make_time_to_mismatch_plots():
 	plt.show()
 
 
+if __name__ == "__main__":
+
+
+	lin_model = get_good_linear_fit()
+	n_lin_model = get_good_noisy_linear_fit(0.1)
+	# nonlin_model = get_good_nonlinear_fit()
+
+
+	lin_rollout = generalised_rollout(lin_model)
+	n_lin_rollout = generalised_rollout(lin_model)
+	# nonlin_rollout = generalised_rollout(nonlin_model)
 
 
 
-lin_model = get_good_linear_fit(incl_f=False)
-nonlin_model = get_good_nonlinear_fit(incl_f=False)
 
-lin_rollout = generalised_rollout(lin_model)
-nonlin_rollout = generalised_rollout(nonlin_model)
+	# lin_model = get_good_linear_fit(incl_f=False)
+	# nonlin_model = get_good_nonlinear_fit(incl_f=False)
 
-while True:
+	# lin_rollout = generalised_rollout(lin_model)
+	# nonlin_rollout = generalised_rollout(nonlin_model)
 
-	# fig, ax = plt.subplots(2, 1)
+	def comparison_plots():
 
-	state = rand_state4(P_RANGE4*0.5)
+		plot_rollout_comparison([0, 0, np.pi, 1], rollout, generalised_rollout(lin_model), 20, t_step=0.2)
+		plot_rollout_comparison([0, 0, np.pi, 1], rollout, generalised_rollout(n_lin_model), 20, t_step=0.2)
+		plt.show()
+		plot_rollout_comparison([0, 0, 0.1, 0], rollout, rollout2, 20, t_step=0.2)
+		plot_rollout_comparison([0, 0, 0, 1], rollout, rollout2, 20, t_step=0.2)
+		plot_rollout_comparison([0, 0, 0, 3], rollout, rollout2, 20, t_step=0.2)
 
-
-	# plt.sca(ax[0])
-	# plot_rollout_comparison(state, rollout, lin_rollout, 100, t_step=0.2)
-	plot_rollout_comparison(state, rollout, nonlin_rollout, 100, t_step=.2)
-	n, cycles = rollout_until_mismatch(to_update_fn(nonlin_model), state, max_it=100, threshold=.2, identify_n_cycles=True)
-	print(n, cycles)
-	plt.plot([.2*n, .2*n], [-15, 15], "k--")
-	# plt.sca(ax[1])
-	# rollout_scores_1(nonlin_rollout, state, max_it=10)
-
-	plt.show()
+	comparison_plots()
 
 
-plot_rollout_comparison([0, 0, np.pi, 1], rollout, generalised_rollout(lin_model), 20, t_step=0.2)
-plot_rollout_comparison([0, 0, 0.1, 0], rollout, rollout2, 20, t_step=0.2)
-plot_rollout_comparison([0, 0, 0, 1], rollout, rollout2, 20, t_step=0.2)
-plot_rollout_comparison([0, 0, 0, 3], rollout, rollout2, 20, t_step=0.2)
+
+
+	while True:
+
+		# fig, ax = plt.subplots(2, 1)
+
+		state = rand_state4(P_RANGE4*0.5)
+
+
+		# plt.sca(ax[0])
+		# plot_rollout_comparison(state, rollout, lin_rollout, 100, t_step=0.2)
+		plot_rollout_comparison(state, rollout, nonlin_rollout, 100, t_step=.2)
+		n, cycles = rollout_until_mismatch(to_update_fn(nonlin_model), state, max_it=100, threshold=.2, identify_n_cycles=True)
+		print(n, cycles)
+		plt.plot([.2*n, .2*n], [-15, 15], "k--")
+		# plt.sca(ax[1])
+		# rollout_scores_1(nonlin_rollout, state, max_it=10)
+
+		plt.show()
+
 

@@ -48,19 +48,19 @@ kfn5 = lambda x, y, s: np.exp(-(
 
 
 
-def nonlinear_training_data(N=512, t_step=0.2, sobol=True, get_saved=True, save=False, fname="lin_train", incl_f=True):
+def nonlinear_training_data(N=512, t_step=0.2, sobol=True, incl_f=True):
 
-	X, Y, C = linear_fit(N, t_step, sobol, get_saved, save, fname, return_data=True, incl_f=incl_f)
+	data, C = linear_fit(N, t_step, sobol, return_data=True, incl_f=incl_f)
 
 	# err = (Y.T - C @ X.T).T
-	err = (Y - X @ C.T)
+	err = (data[1] - data[0] @ C.T)
 
 	# print(Y)
 	# print(err)
 	# print(np.linalg.norm(Y, "fro"))
 	# print(np.linalg.norm(err, "fro"))
 
-	return X, err, C
+	return data[0], err, C
 
 
 def nonlinear_fit(X, Y, reg, scales, M=256, t_step=0.2):
@@ -117,7 +117,7 @@ GOOD_PARAMS = [1000, 1000, 0.32, 4.2, 21]
 def get_nonlinear_fit(N, M, ret_full_fit=True, return_all=False, incl_f=True):
 	print("fitting...")
 	
-	X, Y, C = nonlinear_training_data(N, sobol=True, get_saved=False, incl_f=incl_f)
+	X, Y, C = nonlinear_training_data(N, sobol=True, incl_f=incl_f)
 
 	perm = np.random.permutation(np.arange(N))
 	centre_idxs = perm[:M]
@@ -165,7 +165,7 @@ def get_good_nonlinear_fit(speed_tradeoff=True, ret_full_fit=True, return_all=Fa
 
 def nonlinear_model_slice():
 
-	# X, Y = linear_training_data(256, sobol=True)
+	# X, Y = target_training_data(256, sobol=True)
 	# print(X)
 
 	# fig1 = plt.figure()
@@ -311,7 +311,7 @@ def parameter_optimisation():
 	params = list(SCALES) + [1e-4, 1024]
 	SCAN_N = 20
 
-	test_X, test_Y = linear_training_data(2**12, sobol=False, incl_f=True)
+	test_X, test_Y = target_training_data(2**12, sobol=False, incl_f=True)
 	test_Y -= test_X @ C.T
 
 
@@ -324,36 +324,36 @@ def parameter_optimisation():
 	params = list(GOOD_PARAMS) + [1e-4, 1024]
 
 
-	plt.figure()
-	for exp in [6,7,8,9,10,11]: # best number is 10, takes a long time from 11. M should be as high as possible
-		X, Y, C = nonlinear_training_data(int(2**exp), sobol=True, get_saved=False, incl_f=True)
-		optimise_nonlinear_fit(X, Y, test_X, test_Y, [6], [np.power(2, np.linspace(4, min(11,exp-0.1), 10))], params, True, True, False, show_fixed=False, show_min=False, show_time=True, override_label=int(2**exp))
-	plt.show()
+	# plt.figure()
+	# for exp in [6,7,8,9,10,11]: # best number is 10, takes a long time from 11. M should be as high as possible
+	# 	X, Y, C = nonlinear_training_data(int(2**exp), sobol=True, incl_f=True)
+	# 	optimise_nonlinear_fit(X, Y, test_X, test_Y, [6], [np.power(2, np.linspace(4, min(11,exp-0.1), 10))], params, True, True, False, show_fixed=False, show_min=False, show_time=True, override_label=int(2**exp))
+	# plt.show()
 
 
-	plt.figure()
-	N_values = np.arange(10.1, 16)
-	y_values = np.zeros((len(N_values), 3))
-	for i, N in enumerate(N_values):
-		print("N =", N)
-		X, Y, C = nonlinear_training_data(int(2**N), sobol=True, get_saved=False, incl_f=True)
-		y_values[i,:] = evaluate_nonlinear_fit_score(X, Y, test_X, test_Y, params)
-		print(y_values[i,:])
-	plt.plot(N_values, y_values[:,:2])
-	ax2=plt.gca().twinx()
-	ax2.plot(N_values, y_values[:,2])
-	plt.show()
-
-
-
+	# plt.figure()
+	# N_values = np.arange(10.1, 16)
+	# y_values = np.zeros((len(N_values), 3))
+	# for i, N in enumerate(N_values):
+	# 	print("N =", N)
+	# 	X, Y, C = nonlinear_training_data(int(2**N), sobol=True, incl_f=True)
+	# 	y_values[i,:] = evaluate_nonlinear_fit_score(X, Y, test_X, test_Y, params)
+	# 	print(y_values[i,:])
+	# plt.plot(N_values, y_values[:,:2])
+	# ax2=plt.gca().twinx()
+	# ax2.plot(N_values, y_values[:,2])
+	# plt.show()
 
 
 
-	X, Y, C = nonlinear_training_data(2**9, sobol=True, get_saved=False, incl_f=True)
+
+
+
+	X, Y, C = nonlinear_training_data(2**9, sobol=True, incl_f=True)
 	params = list(SCALES) + [1e-4, 2**8]
 
 
-	test_X, test_Y = linear_training_data(2**12, sobol=False, incl_f=True)
+	test_X, test_Y = target_training_data(2**12, sobol=False, incl_f=True)
 	test_Y -= test_X @ C.T
 
 
@@ -398,22 +398,8 @@ if __name__ == "__main__":
 	actual_fn = target5
 
 
-	while True:
-		fig, ax = plt.subplots(4, 5)
 
-		start_state = rand_state5()
-		for i in range(4):
-			f1 = lambda x : actual_fn(x)[i]
-			f2 = lambda x : nonlin_fn(x)[i]
-			for j in range(5):
-				line_plot(f1, start_state, xi=j, ax=ax[i][j])
-				line_plot(f2, start_state, xi=j, ax=ax[i][j])
-				ax[i][j].set_ylim([-P_RANGE[i], 2*P_RANGE[i]])
-
-		plt.show()
-
-
-
+	exit()
 
 	# saving of models and comparison of execution speeds
 
