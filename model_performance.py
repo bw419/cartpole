@@ -169,19 +169,31 @@ def linear_convergence_w_noise():
 				axs[j].yaxis.tick_right()
 
 	mappable = plt.cm.ScalarMappable(norm=Normalize(noise_vals[0], noise_vals[-1]), cmap="winter_r")
-	divider = make_axes_locatable(axs[1])
 	plt.colorbar(mappable, ax=axs)
 	plt.show()
 
 
-linear_convergence_w_noise()
+# linear_convergence_w_noise()
+
+# nonlin_model = get_good_nonlinear_fit()
+nonlin_model = get_good_noisy_nonlinear_fit(0.0)
+n_nonlin_model = get_good_noisy_nonlinear_fit(.1)
+
+def noisy_target(state):
+	return corrupt_single(state, fast_target(state), obs_noise=0.1*P_RANGE5)[1]
 
 
 while True:
 	start_state = rand_state5()
 	axs = plot_scan_matrix(fast_target, start_state=start_state, fmt="--")
-	plot_scan_matrix(lin_model, start_state=start_state, axs_in=axs)
-	plot_scan_matrix(n_lin_model, start_state=start_state, axs_in=axs)
+	# axs = plot_scan_matrix(noisy_target, start_state=start_state, fmt="--")
+
+	plot_scan_matrix(nonlin_model, start_state=start_state, axs_in=axs)
+	# plot_scan_matrix(n_nonlin_model, start_state=start_state, axs_in=axs)
+
+	# plot_scan_matrix(lin_model, start_state=start_state, axs_in=axs)
+	# plot_scan_matrix(n_lin_model, start_state=start_state, axs_in=axs)
+
 	plt.show()
 
 # nonlin_model = get_good_nonlinear_fit()

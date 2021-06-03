@@ -24,9 +24,15 @@ def target_training_data(N=512, t_step=0.2, sobol=True, incl_f=True):
 	return X, Y
 
 
-def corrupt(X, Y, obs_noise=None, obs_bias=None, dyn_noise=None, dyn_bias=None):
 
-	N_X_cmpts = X.shape[1]
+def corrupt_single(X, Y, obs_noise=None, obs_bias=None, dyn_noise=None, dyn_bias=None):
+
+	return corrupt(X, Y, obs_noise, obs_bias, dyn_noise, dyn_bias, len(X))
+
+def corrupt(X, Y, obs_noise=None, obs_bias=None, dyn_noise=None, dyn_bias=None, N_X_cmpts=None):
+
+	if N_X_cmpts is None:
+		N_X_cmpts = X.shape[1]
 
 	if obs_noise is None:
 		obs_noise = np.zeros(N_X_cmpts)
@@ -53,8 +59,7 @@ def linear_fit(N=1024, t_step=0.2, sobol=True, return_data=False, incl_f=True, e
 
 	nX, nY = corrupt(X, Y, obs_noise, obs_bias, dyn_noise, dyn_bias)
 
-
-	nonzero_cols = (1,3)
+	nonzero_cols = (0,1,3)
 	if incl_f:
 		nonzero_cols += (4,)
 	if not enforce_constraints:
@@ -92,7 +97,7 @@ def get_good_linear_fit(return_data=False, enforce_constraints=True, incl_f=True
 
 def get_good_noisy_linear_fit(noise_fraction, N=2**12, incl_f=True):
 
-	C =  linear_fit(N=N, return_data=False, sobol=True, incl_f=incl_f, enforce_constraints=False,
+	C = linear_fit(N=N, return_data=False, sobol=True, incl_f=incl_f, enforce_constraints=False,
 					obs_noise=noise_fraction*P_RANGE5, obs_bias=None, dyn_noise=None, dyn_bias=None)
 
 	def fn(x):

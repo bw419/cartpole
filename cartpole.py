@@ -329,15 +329,19 @@ def intialise_cfuncs():
 	]
 
 	func_names = [func_name for func_name in attrs if hasattr(fun, func_name)]
+	# print(func_names)
 	funcs = [getattr(fun, func_name) for func_name in func_names]
 
 	funcs[0].argtypes = [ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
-	funcs[1].restype = ctypes.c_float
-	funcs[2].restype = ctypes.c_float
-	funcs[3].restype = ctypes.c_float
-	funcs[4].restype = ctypes.c_float
+	# funcs[8].argtypes = [ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
+	for i in [1, 2, 3, 4]:#, 9, 10, 11, 12]:
+		funcs[i].restype = ctypes.c_float
 
 
+
+# def try_kfn(state, action):
+# 	funcs[8](ctypes.c_int(256), *[ctypes.c_float(x) for x in [state[0], state[1], state[2], state[3], action]])
+# 	return [x() for x in funcs[9:13]]
 
 def fast_single_action(state, action):
 	funcs[0](*[ctypes.c_float(x) for x in [state[0], state[1], state[2], state[3], action]])
@@ -369,6 +373,17 @@ def single_action_perf_comparison():
 	time2 = time.perf_counter() - t
 
 	print(time1/time2, "times faster")
+
+
+	# t = time.perf_counter()
+
+	# for i in range(1000):
+	# 	try_kfn([1.,1.,1.,1.],1.)
+
+	# time3 = time.perf_counter() - t
+	# print(time3)
+
+
 
 
 if __name__ == "__main__":

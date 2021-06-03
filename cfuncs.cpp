@@ -94,76 +94,77 @@ void do_noisy_updates(float in_state0, float in_state1, float in_state2, float i
 
 
 
-float nonlin_model_sigmas[5] = {};
-float nonlin_model_centres[50000] = {};
-float nonlin_model_weights[40000] = {};
+///////////////////////////////////////////////////////////////////
+// TESTED THIS, AND IT'S ONLY ABOUT 3x FASTER THAN NUMPY
+// SO NOT WORTH THE DEBUGGING EFFORT TO USE IT
+///////////////////////////////////////////////////////////////////
+// float nonlin_model_sigmas[5] = { 1, 1, 1, 1, 1 };
+// float nonlin_model_centres[50000] = {};
+// float nonlin_model_weights[40000] = {1};
 
-void set_nonlin_model_sigmas(float sigma1, float sigma2, float sigma3, float sigma4, float sigma5) {
-    nonlin_model_sigmas[0] = sigma1;
-    nonlin_model_sigmas[1] = sigma2;
-    nonlin_model_sigmas[2] = sigma3;
-    nonlin_model_sigmas[3] = sigma4;
-    nonlin_model_sigmas[4] = sigma5;
-}
-
-
-void set_nonlin_model_basis_fn(int i, float x1, float x2, float x3, float x4, float x5, float weight1, float weight2, float weight3, float weight4) {
-    nonlin_model_centres[5*i + 0] = x1;
-    nonlin_model_centres[5*i + 1] = x2;
-    nonlin_model_centres[5*i + 2] = x3;
-    nonlin_model_centres[5*i + 3] = x4;
-    nonlin_model_centres[5*i + 4] = x5;
-    nonlin_model_weights[4*i + 0] = weight1;
-    nonlin_model_weights[4*i + 1] = weight2;
-    nonlin_model_weights[4*i + 2] = weight3;
-    nonlin_model_weights[4*i + 3] = weight4;
-}
+// void set_nonlin_model_sigmas(float sigma1, float sigma2, float sigma3, float sigma4, float sigma5) {
+//     nonlin_model_sigmas[0] = sigma1;
+//     nonlin_model_sigmas[1] = sigma2;
+//     nonlin_model_sigmas[2] = sigma3;
+//     nonlin_model_sigmas[3] = sigma4;
+//     nonlin_model_sigmas[4] = sigma5;
+// }
 
 
-
-float evaluate_kernel_fn(int i, float x1, float x2, float x3, float x4, float x5) {
-    float exponent = 0.0;
-
-    exponent += (x1 - nonlin_model_centres[5*i + 0])/(2*nonlin_model_sigmas[0]);
-    exponent += (x2 - nonlin_model_centres[5*i + 1])/(2*nonlin_model_sigmas[1]);
-    exponent += (x3 - nonlin_model_centres[5*i + 2])/(2*nonlin_model_sigmas[2]);
-    exponent += (x4 - nonlin_model_centres[5*i + 3])/(2*nonlin_model_sigmas[3]);
-    exponent += (x5 - nonlin_model_centres[5*i + 4])/(2*nonlin_model_sigmas[4]);
-
-    return exp(-exponent);
-}
-
-
-float y[4] = {};
-
-void calculate_nonlin_model(int N, float x1, float x2, float x3, float x4, float x5) {
-    for (int i = 0; i < 4; ++i) {
-        y[i] = 0.0;
-    }
-
-    float kfn_val = 0.0;
-    for (int i = 0; i < N; ++i) {
-        kfn_val = evaluate_kernel_fn(i, x1, x2, x3, x4, x5);
-        for (int j = 0; j < 4; ++j) {
-           y[i] += nonlin_model_weights[4*i + j] * kfn_val;
-        }
-    }
-}
+// void set_nonlin_model_basis_fn(int i, float x1, float x2, float x3, float x4, float x5, float weight1, float weight2, float weight3, float weight4) {
+//     nonlin_model_centres[5*i + 0] = x1;
+//     nonlin_model_centres[5*i + 1] = x2;
+//     nonlin_model_centres[5*i + 2] = x3;
+//     nonlin_model_centres[5*i + 3] = x4;
+//     nonlin_model_centres[5*i + 4] = x5;
+//     nonlin_model_weights[4*i + 0] = weight1;
+//     nonlin_model_weights[4*i + 1] = weight2;
+//     nonlin_model_weights[4*i + 2] = weight3;
+//     nonlin_model_weights[4*i + 3] = weight4;
+// }
 
 
 
-float evaluate_nonlin_state1() {
-    return y[0];
-}
+// float evaluate_kernel_fn(int i, float x1, float x2, float x3, float x4, float x5) {
+//     return  exp((x1 - nonlin_model_centres[5*i + 0])/(2*nonlin_model_sigmas[0])
+//      + (x2 - nonlin_model_centres[5*i + 1])/(2*nonlin_model_sigmas[1])
+//      + (x3 - nonlin_model_centres[5*i + 2])/(2*nonlin_model_sigmas[2])
+//      + (x4 - nonlin_model_centres[5*i + 3])/(2*nonlin_model_sigmas[3])
+//      + (x5 - nonlin_model_centres[5*i + 4])/(2*nonlin_model_sigmas[4]));
 
-float evaluate_nonlin_state2() {
-    return y[1];
-}
+// }
 
-float evaluate_nonlin_state3() {
-    return y[2];
-}
 
-float evaluate_nonlin_state4() {
-    return y[3];
-}
+// float y[4] = {};
+
+// void calculate_nonlin_model(int N, float x1, float x2, float x3, float x4, float x5) {
+//     for (int i = 0; i < 4; ++i) {
+//         y[i] = 0.0;
+//     }
+
+//     float kfn_val = 0.0;
+//     for (int i = 0; i < N; ++i) {
+//         kfn_val = evaluate_kernel_fn(i, x1, x2, x3, x4, x5);
+//         for (int j = 0; j < 4; ++j) {
+//            y[i] += nonlin_model_weights[4*i + j] * kfn_val;
+//         }
+//     }
+// }
+
+
+
+// float evaluate_nonlin_state1() {
+//     return y[0];
+// }
+
+// float evaluate_nonlin_state2() {
+//     return y[1];
+// }
+
+// float evaluate_nonlin_state3() {
+//     return y[2];
+// }
+
+// float evaluate_nonlin_state4() {
+//     return y[3];
+// }

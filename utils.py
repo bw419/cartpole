@@ -195,7 +195,7 @@ def function_scan(fn, idx, N, bound=None, start=None):
 
 
 # can be changed to use variable_scan_2d
-def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None, NX=50, NY=50, NS=8, ax=None, incl_f=True, pi_multiples=True, levels=None):
+def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None, NX=50, NY=50, NS=8, ax=None, cb=True, incl_f=True, pi_multiples=True, levels=None):
 
 	if ax is None:
 		ax = plt.gca()
@@ -223,6 +223,8 @@ def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None,
 
 	if start_state is None:
 		start_state = np.zeros(len(bounds))
+	else:
+		start_state = start_state.copy()
 
 	# if si is not None:
 	# for k, s_val in enumerate()
@@ -243,12 +245,12 @@ def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None,
 		im = ax.contourf(X, Y, Z, levels=levels)
 	ax.set_xlabel(VAR_STR[xi])
 	ax.set_ylabel(VAR_STR[yi])
-	
-	divider = make_axes_locatable(ax)
-	cax = divider.append_axes("right", size="5%", pad=0.05)
-	cb = plt.colorbar(im, cax=cax)
 
-	plt.sca(ax)
+	if cb:
+		divider = make_axes_locatable(ax)
+		cax = divider.append_axes("right", size="5%", pad=0.05)
+		cb = plt.colorbar(im, cax=cax)	
+		plt.sca(ax)
 
 	if pi_multiples:
 		if xi == 2: axis_pi_multiples(ax.xaxis)
@@ -285,7 +287,7 @@ def line_plot(fn_to_plot, start_state=None, bounds=None, xi=2, NX=50, ax=None, i
 
 
 
-def plot_scan_matrix(fn_to_plot, N=50, start_state=None, axs_in=None, **kwargs):
+def plot_scan_matrix(fn_to_plot, N=50, start_state=None, axs_in=None, noise=None, **kwargs):
 
 	if start_state is None:
 		start_state = rand_state5()
@@ -378,6 +380,24 @@ def show_matrix(M, zero_range = 0, title="", x="", y="", axes=True, div=True, cm
 
 
 
+def six_planes(fn, varying_bounds=False, **kwargs):
+
+	# this order ensures axis overdots are in good positions:
+	comb_order = ((0, 1), (0, 2), (1, 2), (1, 3), (3, 0), (3, 2))
+	fig, axs = plt.subplots(2, 3)
+	axs = axs.flatten()
+	for i, (xi, yi) in enumerate(comb_order):
+		print(xi, yi)
+		im=contour_plot(fn, xi=xi, yi=yi, ax=axs[i], cb=False, **kwargs)
+		if i%3 or varying_bounds:
+			axs[i].tick_params(left=False, which="both", labelleft=False)
+		if i<3 or varying_bounds:
+			axs[i].tick_params(bottom=False, which="both", labelbottom=False)
+		axs[i].scatter(kwargs["start_state"][xi], kwargs["start_state"][yi], c="r", marker="x")
+	mappable = plt.cm.ScalarMappable(norm=Normalize(-18, 0), cmap="viridis")
+	plt.colorbar(mappable, ax=axs)
+
+
 
 
 # https://stackoverflow.com/questions/40642061/how-to-set-axis-ticks-in-multiples-of-pi-python-matplotlib
@@ -448,6 +468,6 @@ def load_model_function(fname):
 	print("loading model...")
 	with open("../saved/" + fname, "rb") as file:
 		f = dill.load(file)
-		print("loaded")
+		print("loaded.")
 	return f
 
