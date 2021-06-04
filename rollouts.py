@@ -87,7 +87,7 @@ def time_until_mismatch_plot(model_update_fn, max_it=100, oscillations=False, N_
 	if ax is None:
 		ax = plt.gca()
 
-	match_lens = [[],[],[]]
+	match_lens = [[],[]]#,[]]
 
 	if oscillations:
 		max_hist = max_it/4
@@ -113,12 +113,14 @@ def time_until_mismatch_plot(model_update_fn, max_it=100, oscillations=False, N_
 
 
 		# n_c = int(n_c)
-		if get_tot_state_energy(state) > 0 and get_tot_state_energy(f_state) > 0:
+		if get_tot_state_energy(state) > 0:# and get_tot_state_energy(f_state) > 0:
 			match_lens[1].append(n)
-		elif get_tot_state_energy(state) > 0:
-			match_lens[2].append(n)
+		# elif get_tot_state_energy(state) > 0:
+		# 	match_lens[2].append(n)
 		else:
 			match_lens[0].append(n)
+
+
 
 		# if n >= 150:
 		# plot_rollout_comparison(state, rollout, nonlin_rollout, 100, t_step=.2)
@@ -133,9 +135,9 @@ def time_until_mismatch_plot(model_update_fn, max_it=100, oscillations=False, N_
 
 
 	N_bins = 25
-	hists = np.zeros((3, N_bins))
+	hists = np.zeros((2, N_bins))
 
-	for j in range(3):
+	for j in range(len(match_lens)):
 		hists[j,:], b_e = np.histogram(match_lens[j], bins=N_bins, range=(0,max_hist))
 		hists[j,:] /= len(match_lens[j])
 
@@ -144,7 +146,7 @@ def time_until_mismatch_plot(model_update_fn, max_it=100, oscillations=False, N_
 
 	ax.bar(x, hists[0,:], width=width)
 	ax.bar(x, hists[1,:], bottom=hists[0,:], width=width)
-	ax.bar(x, hists[2,:], bottom=hists[1,:]+hists[0,:], width=width)
+	# ax.bar(x, hists[2,:], bottom=hists[1,:]+hists[0,:], width=width)
 
 	# SCALE SO THAT TOTAL # RUNS ADDS TO 1?
 	ax.tick_params(left=False, labelleft=False)
@@ -158,17 +160,17 @@ def time_until_mismatch_plot(model_update_fn, max_it=100, oscillations=False, N_
 
 def make_time_to_mismatch_plots():
 
-	fig, ax = plt.subplots(2, 3)
+	fig, ax = plt.subplots(2, 2)
 	ax = ax.flatten()
+	# ax = [ax]
 
-	for i, tup in enumerate([[5, 7], [6,8], [7,9], [8,10], [9,11], [10, 12]]):
-		print(i, tup)
+	for i, M_exp in enumerate([9,10,11,12]):
+		print(i, M_exp)
 
-		M_exp, N_exp = tup
-		nonlin_model = get_nonlinear_fit(2**N_exp, 2**M_exp, incl_f=False)
+		nonlin_model = get_good_nonlinear_fit(2**M_exp, incl_f=True)
 
 		# time_until_mismatch_plot(to_update_fn(nonlin_model), ax=ax[i])
-		time_until_mismatch_plot(to_update_fn(nonlin_model), ax=ax[i], oscillations=True, N_trials=10000)
+		time_until_mismatch_plot(to_update_fn_w_action(nonlin_model), ax=ax[i], oscillations=False, N_trials=1000)
 
 	plt.show()
 
@@ -176,14 +178,20 @@ def make_time_to_mismatch_plots():
 if __name__ == "__main__":
 
 
+	# make_time_to_mismatch_plots()
+
+
+	# exit()
+
 	lin_model = get_good_linear_fit()
 	n_lin_model = get_good_noisy_linear_fit(0.1)
-	# nonlin_model = get_good_nonlinear_fit()
+	nonlin_model = get_good_nonlinear_fit(2**11)
+	# nonlin_model = load_model_function("nonlin_16_12")
 
 
 	lin_rollout = generalised_rollout(lin_model)
-	n_lin_rollout = generalised_rollout(lin_model)
-	# nonlin_rollout = generalised_rollout(nonlin_model)
+	n_lin_rollout = generalised_rollout(n_lin_model)
+	nonlin_rollout = generalised_rollout(nonlin_model)
 
 
 
@@ -196,16 +204,20 @@ if __name__ == "__main__":
 
 	def comparison_plots():
 
-		plot_rollout_comparison([0, 0, np.pi, 1], rollout, generalised_rollout(lin_model), 20, t_step=0.2)
-		plot_rollout_comparison([0, 0, np.pi, 1], rollout, generalised_rollout(n_lin_model), 20, t_step=0.2)
+		# plot_rollout_comparison([0, 0, np.pi, 1], rollout, generalised_rollout(lin_model), 20, t_step=0.2)
+		# plot_rollout_comparison([0, 0, np.pi, 1], rollout, generalised_rollout(n_lin_model), 20, t_step=0.2)
 		plt.show()
 		plot_rollout_comparison([0, 0, 0.1, 0], rollout, rollout2, 20, t_step=0.2)
 		plot_rollout_comparison([0, 0, 0, 1], rollout, rollout2, 20, t_step=0.2)
 		plot_rollout_comparison([0, 0, 0, 3], rollout, rollout2, 20, t_step=0.2)
 
-	comparison_plots()
+	# comparison_plots()
 
 
+	while True:
+		state = rand_state4(P_RANGE4*0.5)
+		plot_rollout_comparison(state, rollout, nonlin_rollout, 100, t_step=.2)
+		plt.show()
 
 
 	while True:
@@ -218,7 +230,8 @@ if __name__ == "__main__":
 		# plt.sca(ax[0])
 		# plot_rollout_comparison(state, rollout, lin_rollout, 100, t_step=0.2)
 		plot_rollout_comparison(state, rollout, nonlin_rollout, 100, t_step=.2)
-		n, cycles = rollout_until_mismatch(to_update_fn(nonlin_model), state, max_it=100, threshold=.2, identify_n_cycles=True)
+
+		n, cycles = rollout_until_mismatch(to_update_fn_w_action(nonlin_model), state, max_it=100, threshold=.2, identify_n_cycles=True)
 		print(n, cycles)
 		plt.plot([.2*n, .2*n], [-15, 15], "k--")
 		# plt.sca(ax[1])

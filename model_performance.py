@@ -8,6 +8,112 @@ from rollouts import *
 
 
 
+def model_comparison_scatter(function, NK=100, incl_f=True):
+
+	colours = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
+
+	SCAN_N = 10
+
+	try:
+		NK[0]
+	except:
+		NK = [NK]*5
+
+	print(NK)
+
+	if incl_f:
+		bounds = P_RANGE5
+	else:
+		bounds = P_RANGE4
+
+	# fig, axs = plt.subplots(5, 1)
+	# axs = axs.flatten()
+	for i in range(len(bounds)):
+		# plt.sca(axs[i])
+		plt.figure(figsize=(3.4, 2.9))
+		a = np.linspace(-10, 10, 2)
+		plt.plot(a,a, "k--", alpha=0.5, lw=1)
+
+		for k in range(NK[i]):
+
+			x = rand_state(bounds)
+			x1 = x.copy()
+
+			scan = bounds[i] * np.linspace(-1, 1, SCAN_N)
+			vals1 = np.zeros((SCAN_N, 4))
+			vals2 = np.zeros((SCAN_N, 4))
+
+			for l, s in enumerate(scan):
+
+				x1[i] = s
+				vals1[l, :] += target(x1)
+				vals2[l, :] += function(x1)
+
+			for j in range(0,4):
+
+				zorder = [7, 5, 6, 4]
+				lw = 2
+				alpha = 1
+				if k == 0:
+					p = plt.plot(vals1[:,j], vals2[:,j], c=colours[j], lw=lw, label=VAR_STR[j], alpha=alpha, zorder=zorder[j])
+				else:
+					p = plt.plot(vals1[:,j], vals2[:,j], c=colours[j], lw=lw, alpha=alpha, zorder=zorder[j])
+
+
+		plt.ylabel(r"Prediction")
+		plt.xlabel(r"True value")
+		plt.title(f"Model function vs target for \n{NK[i]} random I.C.s, scanned over {VAR_STR[i]}")
+		plt.xlim([-10, 10])
+		plt.ylim([-10, 10])
+		plt.legend()
+		plt.tight_layout()
+	
+	plt.show()
+
+
+
+# THIS NEEDS TO BE PLOTTED RELATIVE TO eg STD DEV OF THAT OUTPUT VARIABLE.
+def linear_prediction_errors():
+	lin = get_good_linear_fit(enforce_constraints=False)
+
+	for k in range(4):
+
+		ax = plt.gca()
+
+		def error_fn(x):
+			return target(x, 0.2)[k] - lin(x)[k]
+			# error = np.linalg.norm(pred[k] - actual[k])
+
+		contour_plot(error_fn)#, xi=2, yi=3)
+
+		ax.set_title(r"Error in prediction of " + VAR_STR[k])
+
+		plt.show()
+
+
+
+def nonlinear_fit_evaluate():
+
+	model_fn = load_model_function("nonlin_16_12")
+	fig, axs = plt.subplots(2, 2)
+	axs = axs.flatten()
+	axs[0].set_title("True change in " + VAR_STR[1])
+	contour_plot(lambda x: target(x)[1], ax=axs[0])
+	axs[2].set_title("Predicted change in " + VAR_STR[1])
+	contour_plot(lambda x: model_fn(x)[1], ax=axs[2])
+	axs[1].set_title("True change in " + VAR_STR[2])
+	contour_plot(lambda x: target(x)[2], ax=axs[1])
+	axs[3].set_title("Predicted change in " + VAR_STR[2])
+	contour_plot(lambda x: model_fn(x)[2], ax=axs[3])
+	plt.show()
+
+	model_comparison_scatter(model_fn, [50, 50, 3, 3, 3])
+
+
+
+
+
+
 
 # evaluate single step RMSE over random states
 def get_rand_model_single_step_RMSE(model_fn, N=2048, rand_range=P_RANGE5):
@@ -102,7 +208,16 @@ def junk_I_think():
 
 
 
+
+
+
 colours = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
+
+
+# linear_prediction_errors()
+# nonlinear_fit_evaluate()
+
+
 
 lin_model = get_good_linear_fit()
 # n_lin_model = get_good_noisy_linear_fit(0.3)
@@ -185,14 +300,15 @@ def noisy_target(state):
 
 while True:
 	start_state = rand_state5()
-	axs = plot_scan_matrix(fast_target, start_state=start_state, fmt="--")
+	axs = plot_scan_matrix(fast_target, start_state=start_state)#, fmt="--")
 	# axs = plot_scan_matrix(noisy_target, start_state=start_state, fmt="--")
 
-	plot_scan_matrix(nonlin_model, start_state=start_state, axs_in=axs)
+	# plot_scan_matrix(nonlin_model, start_state=start_state, axs_in=axs)
 	# plot_scan_matrix(n_nonlin_model, start_state=start_state, axs_in=axs)
 
-	# plot_scan_matrix(lin_model, start_state=start_state, axs_in=axs)
+	plot_scan_matrix(lin_model, start_state=start_state, axs_in=axs)
 	# plot_scan_matrix(n_lin_model, start_state=start_state, axs_in=axs)
+	plt.gcf().suptitle("Scans across single variables of target function & linear model")
 
 	plt.show()
 

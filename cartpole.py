@@ -268,7 +268,7 @@ def remapped_angle(state):
 
 # converts eg. target(x) to single_action(x)
 def to_update_fn_w_action(fn):
-	def new_fn(x, action):
+	def new_fn(x, action=0.0):
 		return fn([x[0], x[1], x[2], x[3], action]) + x[:4]
 	return new_fn
 
@@ -343,7 +343,7 @@ def intialise_cfuncs():
 # 	funcs[8](ctypes.c_int(256), *[ctypes.c_float(x) for x in [state[0], state[1], state[2], state[3], action]])
 # 	return [x() for x in funcs[9:13]]
 
-def fast_single_action(state, action):
+def fast_single_action(state, action=0.0):
 	funcs[0](*[ctypes.c_float(x) for x in [state[0], state[1], state[2], state[3], action]])
 	return [x() for x in funcs[1:5]]
 

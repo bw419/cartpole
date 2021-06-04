@@ -10,7 +10,7 @@ from time import perf_counter
 single_action = fast_single_action
 
 model_fn = load_model_function("nonlin_13_11")
-# model_fn = load_model_function("nonlin_16_14")
+# model_fn = load_model_function("nonlin_16_12")
 learned_update_fn = to_update_fn_w_action(model_fn)
 
 
@@ -133,7 +133,7 @@ def get_policy_fn(param_object, which="linear", log=True):
 
 
 
-def policy_simulation(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True):
+def policy_simulation(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True, ret_success=True):
 
 	states = [IC]
 	actions = [policy_fn(IC)]
@@ -153,13 +153,26 @@ def policy_simulation(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True
 			# return states, actions, np.mean(losses)
 
 		if it % 5 == 0 and stop_early:
-			if it % 5 == 0 and np.abs(states[-1][0]) > 3*P_RANGE4[0]:
-				return states, actions, 1.0
-			if stop_early and np.abs(np.sum(losses) - prev_loss) < 0.0001:
-				return states, actions, np.sum(losses)/max_it
-			prev_loss = np.sum(losses)
+			if ret_success:
+				if np.abs(states[-1][0]) > 3*P_RANGE4[0]:
+					return 0.
+				if np.mean(losses[-10]) < 0.0001:
+					return 1.
 
-	return states, actions, np.mean(losses)
+			elif:
+				if np.abs(states[-1][0]) > 3*P_RANGE4[0]:
+					return states, actions, 1.0
+				if np.abs(np.sum(losses) - prev_loss) < 0.0001:
+					return states, actions, np.sum(losses)/max_it
+				prev_loss = np.sum(losses)
+
+	if ret_success:
+		if np.mean(losses[-10]) < 0.0001:
+			return 1.
+		else:
+			return 0.
+	else:
+		return states, actions, np.mean(losses)
 
 
 
@@ -224,15 +237,19 @@ def policy_loss_N_runs(IC_gen_fn, loss_fn, update_fn, policy_fn, N_its, N_runs, 
 		])/(N_runs)
 
 
+######################################
+# changed this
+######################################
 def policy_success(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True):
-	loss = policy_loss(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=stop_early)
+	loss = policy_simulation(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=stop_early, ret_success=True)
 	return loss < 0.1
 
 def policy_success_rate(IC_gen_fn, loss_fn, update_fn, policy_fn, N_its, N_runs):
 	return np.count_nonzero([
-		policy_loss(IC_gen_fn(), loss_fn, update_fn, policy_fn, N_its) < 0.1
+		policy_simulation(IC_gen_fn(), loss_fn, update_fn, policy_fn, N_its, stop_early=stop_early, ret_success=True)
 		for i in range(N_runs)
 		])/(N_runs)
+
 
 # obtain a function mapping policy parameters to a loss value
 def get_policy_loss_fn(IC_gen_fn, loss_sig, model_fn, N_runs, N_its, which="linear", log=True, seed=False):

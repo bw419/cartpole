@@ -98,84 +98,15 @@ def linear_model_matrix_plot():
 # linear_model_matrix_plot()
 
 
-def model_comparison_scatter(function, NK=100, incl_f=True):
-
-	colours = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
-
-
-	SCAN_N = 10
-	NK = NK
-
-	if incl_f:
-		bounds = P_RANGE5
-	else:
-		bounds = P_RANGE4
-
-
-	for i in range(len(bounds)):
-		a = np.linspace(-15, 15, 2)
-		plt.plot(a,a, "k--", alpha=0.5, lw=1, label="perfect prediction")
-
-		for k in range(NK):
-
-			x = rand_state(bounds)
-			x1 = x.copy()
-
-			scan = bounds[i] * np.linspace(-1, 1, SCAN_N)
-			vals1 = np.zeros((SCAN_N, 4))
-			vals2 = np.zeros((SCAN_N, 4))
-
-			for l, s in enumerate(scan):
-
-				x1[i] = s
-				vals1[l, :] += target(x1)
-				vals2[l, :] += function(x1)
-
-			for j in range(0,4):
-			
-				lw = 2
-				if k == 0:
-					p = plt.plot(vals1[:,j], vals2[:,j], c=colours[j], lw=lw, label=VAR_STR[j])
-				else:
-					p = plt.plot(vals1[:,j], vals2[:,j], c=colours[j], lw=lw)
-
-
-		plt.ylabel(r"$CX$")
-		plt.xlabel(r"$f(X)$")
-		plt.title(f"Modelled state evolution vs. actual evolution\nfor {NK} random I.C.s, scanned over {VAR_STR[i]}")
-		plt.legend()
-		plt.show()
 
 
 
-# C = train_model(500, 0.2)
-# np.save("../lin_model2", C)
-# print(C)
-C = np.load("../lin_model.npy")
 
 
-lin = get_good_linear_fit(enforce_constraints=False)
-nonlin = get_good_nonlinear_fit()
-
+# nonlin = get_good_nonlinear_fit()
+nonlin = load_model_function("nonlin_16_12")
 # model_comparison_scatter(lin, 10)
-model_comparison_scatter(nonlin, 100)
 
 
 
-def prediction_errors():
 
-	for k in range(4):
-
-		ax = plt.gca()
-
-		def error_fn(x):
-			return target(x, 0.2)[k] - (C @ x)[k]
-			# error = np.linalg.norm(pred[k] - actual[k])
-
-		contour_plot(error_fn, 2, 3)
-
-		ax.set_title(r"Error in prediction of " + VAR_STR[k])
-
-		plt.show()
-
-# prediction_errors()

@@ -26,7 +26,9 @@ def rollout(IC, N, t_step=0.2):
 	return states
 
 
-def generalised_rollout(update_fn):
+def generalised_rollout(model_fn):
+
+	update_fn = to_update_fn_w_action(model_fn)
 	def fn(IC, N):
 		T = np.arange(0, N)
 
@@ -34,7 +36,7 @@ def generalised_rollout(update_fn):
 		states[0] = IC[:4]
 
 		for t in T[1:]:
-			state = states[t-1] + update_fn(states[t-1])
+			state = update_fn(states[t-1])
 			state[2] = remap_angle(state[2])
 			states[t] = state
 		return states
@@ -43,77 +45,133 @@ def generalised_rollout(update_fn):
 
 
 
-def rollout_scores_1(model_rollout_fn, IC, N):
-	true_states = rollout(IC, N)
-	modelled_states = model_rollout_fn(IC, N)
 
-	true_states[:,2] = remap_angle_v(true_states[:,2])
+def states_match_1(true_state, test_state, threshold=0.2):
+	true_state1 = true_state.copy()
+	true_state1[2] = remap_angle_v(true_state1[2])
+	error = true_state1 - test_state
 
-	errors = true_states - modelled_states
+	if np.abs(error[2]) > np.pi:
+		error[2] = 2*np.pi - np.abs(error[2])
 
+	error = np.abs(error)
+	weighted_error = 0.5*error/P_RANGE4
 
-	for i, elem in enumerate(errors[:,2]):
-		if np.abs(elem) > np.pi:
-			errors[i,2] = 2*np.pi - np.abs(errors[i,2])
-
-	errors = np.abs(errors)
-	weighted_errors = .5*errors/P_RANGE4[np.newaxis,:]
-
-	plt.plot(np.arange(len(errors)), weighted_errors)
-
-	return weighted_errors
+	return all(weighted_error < threshold)
 
 
-def rollout_until_mismatch(model_update_fn, IC, threshold=0.1, max_it=50, identify_n_cycles=False):
+def states_match_2(true_state, test_state, theta_dot_range, x_dot_range, x_range, threshold=0.2):
 
-	max_search_window = 10
+	theta_dot_error = np.abs(true_state[3] - test_state[3])
+	weighted_td_error = theta_dot_error/theta_dot_range
+
+	x_dot_error = np.abs(true_state[1] - test_state[1])
+	weighted_xd_error = x_dot_error/x_dot_range
+
+	x_error = np.abs(true_state[0] - test_state[0])
+	weighted_x_error = x_error/x_range
+
+	# print(weighted_td_error, weighted_xd_error, weighted_x_error)
+
+	criterion = all([v < threshold for v in (weighted_x_error, weighted_xd_error, weighted_td_error)])
+	return criterion
+
+
+
+
+def rollout_until_mismatch_sim_1(model_update_fn, IC, max_search_window, threshold, max_it):
 
 	true_states = [IC]
 	modelled_states = [IC]
 	matches = []
-	max_abs_theta_dot = 0
+
+	state_abs_bigger = [False, False, False, False]
+
 	for it in range(max_it):
+		# get the range of theta dot and x dot for states_match_2
 		if it >= max_search_window:
 			theta_dots = [x[3] for x in true_states[-max_search_window:]]
 			x_dots = [x[1] for x in true_states[-max_search_window:]]
 			theta_dot_range = np.abs(max(theta_dots) - min(theta_dots))
 			x_dot_range = np.abs(max(x_dots) - min(x_dots))
-
+		
 			# print(theta_dot_range, x_dot_range)
 
+
+		# when first reaching end of search window
 		if it == max_search_window:
 			for j in range(max_search_window):
 				matches.append(states_match_2(true_states[j], modelled_states[j], theta_dot_range, x_dot_range, P_RANGE4[0], threshold))
 			if not all(matches):
 				break
 
-		true_states.append(single_action4(true_states[-1]))
+		# do the actual update
+		true_states.append(fast_single_action(true_states[-1]))
 		modelled_states.append(model_update_fn(modelled_states[-1]))
+
 
 		if it >= max_search_window:
 			matches.append(states_match_2(true_states[-1], modelled_states[-1], theta_dot_range, x_dot_range, P_RANGE4[0], threshold))
 			if not matches[-1]:
 				break
 
-	true_states = np.array(true_states)
-	modelled_states = np.array(modelled_states)
-
-	final_state = true_states[-min(len(true_states), 5)]
-
-
-	# for i in range(5):
-		# final_state = single_action4(final_state)
-
-
 	N_matches = np.argmin(matches) # stops at first False
 	if N_matches == 0:
 		N_matches = max_it
 
+	return np.array(true_states), np.array(modelled_states), N_matches
+
+
+# rolls out approx to the nearest cycle
+def rollout_until_mismatch_sim_2(model_update_fn, IC, threshold, max_it):
+
+	true_states = [IC]
+	modelled_states = [IC]
+	matches = []
+
+	for it in range(max_it):
+
+		# mismatch conditions:
+
+		if it >= 2:
+			for i in range(1, 4):
+				trial_extremum = true_states[-2][i]
+				if np.sign(true_states[-1][i] - trial_extremum) != np.sign(trial_extremum - true_states[-3][i]):
+
+					# local extremum!
+					error = np.abs((modelled_states[-2][i] - trial_extremum)/trial_extremum)
+					print("local extremum! elem", i, "fractional error", error)
+					if error > threshold:
+						it -= 1 # adjust back a step
+						break
+
+		x_error = np.abs((modelled_states[-1][0] - true_states[-1][0])/true_states[-1][0])
+		if x_error > threshold:
+			break
+
+		# do the actual update
+		true_states.append(fast_single_action(true_states[-1]))
+		modelled_states.append(model_update_fn(modelled_states[-1]))
+
+	N_matches = it
+
+	return np.array(true_states), np.array(modelled_states), N_matches
+
+
+
+def rollout_until_mismatch(model_update_fn, IC, threshold=0.1, max_it=50, identify_n_cycles=False):
+
+
+	true_states, modelled_states, N_matches = rollout_until_mismatch_sim_1(model_update_fn, IC, 10, threshold, max_it)
+	# true_states, modelled_states, N_matches = rollout_until_mismatch_sim_2(model_update_fn, IC, threshold, max_it)
+
+
+	final_state = true_states[-min(len(true_states), 5)]
+
+
 	# if N_matches <= 2:# or N_matches == 4:
 	# 	print("true states", true_states[:,3])
 	# 	print("modelled", modelled_states[:,3])
-	# 	print("max", max_abs_theta_dot)
-	# 	print("rel_vals", np.abs(true_states[:,3] - modelled_states[:,3])/max_abs_theta_dot)
 	# 	print("matches", matches)
 	# 	print(N_matches)
 
@@ -139,44 +197,10 @@ def rollout_until_mismatch(model_update_fn, IC, threshold=0.1, max_it=50, identi
 	return N_matches, final_state
 
 
-def states_match_1(true_state, test_state, threshold=0.2):
-	true_state1 = true_state.copy()
-	true_state1[2] = remap_angle_v(true_state1[2])
-	error = true_state1 - test_state
-
-	if np.abs(error[2]) > np.pi:
-		error[2] = 2*np.pi - np.abs(error[2])
-
-	error = np.abs(error)
-	weighted_error = 0.5*error/P_RANGE4
-
-	return all(weighted_error < threshold)
 
 
-def states_match_2(true_state, test_state, val_range, threshold=0.2):
-
-	error = true_state[3] - test_state[3]
-	error = np.abs(error)
-	weighted_error = error/val_range
-
-	return weighted_error < threshold
 
 
-def states_match_2(true_state, test_state, theta_dot_range, x_dot_range, x_range, threshold=0.2):
-
-	theta_dot_error = np.abs(true_state[3] - test_state[3])
-	weighted_td_error = theta_dot_error/theta_dot_range
-
-	x_dot_error = np.abs(true_state[1] - test_state[1])
-	weighted_xd_error = x_dot_error/x_dot_range
-
-	x_error = np.abs(true_state[0] - test_state[0])
-	weighted_x_error = x_error/x_range
-
-	# print(weighted_td_error, weighted_xd_error, weighted_x_error)
-
-	criterion = all([v < threshold for v in (weighted_x_error, weighted_xd_error, weighted_td_error)])
-	return criterion
 
 
 # CHANGE THESE SO ROLLOUT AND MODEL WORK IN THE SAME WAY?
