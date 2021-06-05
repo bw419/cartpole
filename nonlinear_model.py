@@ -38,13 +38,20 @@ kfn5 = lambda x, y, s: np.exp(-(
 	np.square((x[4]-y[:,4])*INV_SQRT2/s[4])
 ))
 
-# kfn1 = lambda x, y, s: np.exp(-(
-# 	np.square((x[:,0]-y[:,0])*INV_SQRT2/s[0]) +
-# 	np.square((x[:,1]-y[:,1])*INV_SQRT2/s[1]) +
-# 	np.square(np.sin(.5*(x[:,2]-y[:,2]))*INV_SQRT2/s[2]) +
-# 	np.square((x[:,3]-y[:,3])*INV_SQRT2/s[3])
-# ))
+fast_kfn4 = lambda x, y, s: np.exp(-(
+	# np.square((x[0]-y[:,0])*INV_SQRT2/s[0]) +
+	# np.square((x[1]-y[:,1])*INV_SQRT2/s[1]) +
+	np.square(np.sin(.5*(x[2]-y[:,2]))*INV_SQRT2/s[2]) +
+	np.square((x[3]-y[:,3])*INV_SQRT2/s[3])
+))
 
+fast_kfn5 = lambda x, y, s: np.exp(-(
+	# np.square((x[0]-y[:,0])*INV_SQRT2/s[0]) +
+	# np.square((x[1]-y[:,1])*INV_SQRT2/s[1]) +
+	np.square(np.sin(.5*(x[2]-y[:,2]))*INV_SQRT2/s[2]) +
+	np.square((x[3]-y[:,3])*INV_SQRT2/s[3]) +
+	np.square((x[4]-y[:,4])*INV_SQRT2/s[4])
+))
 
 
 
@@ -62,6 +69,13 @@ def nonlinear_training_data(N=512, t_step=0.2, sobol=True, incl_f=True, **kwargs
 
 	return data[2], err, C
 
+warned_fast_version=False
+def warn_fast_version():
+	global warned_fast_version
+	if not warned_fast_version:
+		warned_fast_version=True
+		print("note: Using accelerated kfn without first 2 elements due to large scales.")
+
 
 def nonlinear_fit(X, Y, reg, scales, M=256, t_step=0.2):
 
@@ -76,11 +90,17 @@ def nonlinear_fit(X, Y, reg, scales, M=256, t_step=0.2):
 	K_MN = np.zeros((M, N))
 
 	if X.shape[1] == 4:
-		kfn_s = kfn_s4
-		kfn = kfn4
+		if scales[0] >= 1e3 and scales[1] >= 1e3:
+			kfn = fast_kfn4
+			warn_fast_version()
+		else:
+			kfn = kfn4
 	else:
-		kfn_s = kfn_s5
-		kfn = kfn5
+		if scales[0] >= 1e3 and scales[1] >= 1e3:
+			kfn = fast_kfn5
+			warn_fast_version()
+		else:
+			kfn = kfn5
 
 	for i in range(M):
 		a = kfn(X[i,:], X[i+1:,:], σ)
@@ -152,6 +172,8 @@ def get_nonlinear_fit(N, M, ret_full_fit=True, return_all=False, incl_f=True, pa
 	else:
 		good_params = params[:5]
 		REG = params[5]
+		if REG < 0:
+			REG = np.power(10., REG)
 
 	residual_fit = nonlinear_fit(X, Y, REG, good_params, M)
 
@@ -177,7 +199,7 @@ def get_nonlinear_fit(N, M, ret_full_fit=True, return_all=False, incl_f=True, pa
 def get_good_nonlinear_fit(M=None, speed_tradeoff=True, ret_full_fit=True, return_all=False, incl_f=True, **kwargs):
 	
 	if M is not None:
-		return get_nonlinear_fit(16, M, ret_full_fit, return_all, incl_f, **kwargs)
+		return get_nonlinear_fit(16*M, M, ret_full_fit, return_all, incl_f, **kwargs)
 
 	else:
 		if speed_tradeoff:
@@ -232,7 +254,7 @@ def nonlinear_model_slice():
 
 
 
-def optimise_nonlinear_fit(X, Y, test_X, test_Y, scan_vars, scan_ranges, fixed_vars, plot=True, log_scale=True, fixed_colours=True, show_fixed=True, show_min=False, time_ax=None, override_label=None, show_train=True):
+def optimise_nonlinear_fit(X, Y, test_X, test_Y, scan_vars, scan_ranges, fixed_vars, plot=True, log_scale=True, fixed_colours=True, force_colour=None, show_fixed=True, show_min=False, time_ax=None, override_label=None, show_train=True):
 
 	# scan_var = 0-4: Component of state vector
 	# scan_var = 5: regularisation
@@ -280,6 +302,7 @@ def optimise_nonlinear_fit(X, Y, test_X, test_Y, scan_vars, scan_ranges, fixed_v
 			y2[i] = t1-t0
 
 
+
 		min_idx = np.argmin(y)
 
 		optima[s_idx] = scan_range[min_idx]
@@ -297,7 +320,10 @@ def optimise_nonlinear_fit(X, Y, test_X, test_Y, scan_vars, scan_ranges, fixed_v
 				if time_ax is not None:
 					time_ax.plot(scan_range, y2, ":", c=colours[s_idx])
 			else:
-				p = plt.plot(scan_range, y, label=label)
+				if force_colour is not None:
+					p = plt.plot(scan_range, y, c=force_colour, label=label)
+				else:
+					p = plt.plot(scan_range, y, c=colours[s_idx], label=label)
 				if show_train:
 					plt.plot(scan_range, y1, "--", lw=1, c=p[0].get_color())#, label=f"train, {s_idx}")
 				if show_fixed: 
@@ -313,6 +339,10 @@ def optimise_nonlinear_fit(X, Y, test_X, test_Y, scan_vars, scan_ranges, fixed_v
 
 	return np.array(optima), optimal_score, y, y1, y2
 
+
+def model_fit_score(update_fn, N=2**14):
+	X, Y = target_training_data(N, sobol=False)
+	return data_errors(X, Y, update_fn)
 
 
 
@@ -331,9 +361,9 @@ def evaluate_nonlinear_fit_score(X, Y, test_X, test_Y, params):
 
 def get_train_and_test_data(N_train, N_test, obs_noise=None):
 
-	X, Y, C = nonlinear_training_data(2**9, sobol=True, incl_f=True, obs_noise=None)
+	X, Y, C = nonlinear_training_data(N_train, sobol=True, incl_f=True, obs_noise=None)
 	
-	test_X, test_Y = target_training_data(2**12, sobol=False, incl_f=True)
+	test_X, test_Y = target_training_data(N_test, sobol=False, incl_f=True)
 	test_X, test_Y = corrupt(test_X, test_Y, obs_noise=None)
 	test_Y -= test_X @ C.T
 
@@ -341,7 +371,7 @@ def get_train_and_test_data(N_train, N_test, obs_noise=None):
 
 
 
-def param_graph_optimise(noise_fraction=0.0):
+def param_graphs(noise_fraction=0.0):
 	
 	obs_noise = noise_fraction*P_RANGE5
 	SCAN_N = 20
@@ -355,7 +385,7 @@ def param_graph_optimise(noise_fraction=0.0):
 	if False:
 		plt.figure()
 		for noise_frac in np.linspace(0, .1, 7):
-			X, Y, test_X, test_Y = get_train_and_test_data(2**9, 2**12, obs_noise=noise_fraction*P_RANGE5)
+			X, Y, test_X, test_Y = get_train_and_test_data(2**11, 2**12, obs_noise=noise_fraction*P_RANGE5)
 
 			optima = optimise_nonlinear_fit(X, Y, test_X, test_Y, [5], [np.power(10, np.linspace(-4, 0, 50))], 
 											params, True, True, fixed_colours=False)
@@ -363,16 +393,23 @@ def param_graph_optimise(noise_fraction=0.0):
 
 
 	def param_scans():
-		# params = list(INITIAL_GUESS) + [1e-4, 512]
+		params_guess = list(INITIAL_GUESS) + [1e-4, 512]
 		params = list(GOOD_PARAMS) + [GOOD_REG, 512]
 
 		# lambda scan with inital guess
 		if True:
 			plt.figure()
-			X, Y, test_X, test_Y = get_train_and_test_data(2**11, 2**14)
+			X, Y, test_X, test_Y = get_train_and_test_data(2**11, 2**12)
+
 
 			optima = optimise_nonlinear_fit(X, Y, test_X, test_Y, [5], [np.power(10, np.linspace(-6, -1, 50))], 
-											params, True, True)
+											params_guess, True, True, "$\lambda$")
+
+			# optima = optimise_nonlinear_fit(X, Y, test_X, test_Y, [5], [np.power(10, np.linspace(-6, -1, 50))], 
+											# params, True, True, fixed_colours=False, force_colour="tab:pink", override_label="$\lambda$, ")
+
+
+			plt.show()
 
 		# scans of scale parameters
 		if True:
@@ -382,11 +419,11 @@ def param_graph_optimise(noise_fraction=0.0):
 			test_X, test_Y = corrupt(test_X, test_Y, obs_noise=obs_noise)
 			test_Y -= test_X @ C.T
 
-
 			plt.figure()
-			scan_range = np.power(10, np.linspace(-2, 3, 50))
+			scan_range = np.power(10, np.linspace(-2, 3.1, 50))
 			scan_ranges = [scan_range for i in range(5)]
-			optimise_nonlinear_fit(X, Y, test_X, test_Y, range(5), scan_ranges, params, True, True)
+
+			optimise_nonlinear_fit(X, Y, test_X, test_Y, range(5), scan_ranges, params_guess, True, True)
 		
 		plt.show()
 
@@ -493,10 +530,27 @@ def param_graph_optimise(noise_fraction=0.0):
 
 
 		if True:
-
-			M_exps = np.linspace(7, 11, 100)
-
 			plt.figure()
+
+
+			M_exps1 = [7,8,9,10,11,12]
+			opt_ts = []
+			opt_s = []
+			for M_exp in M_exps1:
+				opt_fit, props = get_optimal_nonlin_fit(M_exp, return_properties=True)
+
+				t = time.perf_counter()
+				for i in range(1000):
+					opt_fit([1.,1.,1.,1.,1.])
+				t_eval = (time.perf_counter() - t)/1000
+				
+				opt_ts.append(t_eval)
+				opt_s.append(props["fit"])
+
+
+
+			M_exps = np.linspace(7, 11, 40)
+
 			t1s = []
 			t2s = []
 			s = []
@@ -537,17 +591,22 @@ def param_graph_optimise(noise_fraction=0.0):
 			plt.gca().twinx()
 			plt.loglog()
 
+
+			plt.scatter(opt_s, opt_ts, c="c", marker="*", s=80, label="Evaluation time\n(optimised)", zorder=10)
+
 			plt.ylabel("Evaluation time (s)")
 			plt.scatter(s,t2s, c="k", marker="x", label="Evaluation time")
 			plt.scatter([np.nan], [np.nan], c="r", marker="x", label="Fitting time")
 			plt.semilogy()
 
 
-			plt.legend()
+
+
+			plt.legend(loc=3)
 			plt.title("Fit quality vs computation time (N=16M)")
 			plt.show()
 
-	N_M_scans()
+	# N_M_scans()
 
 
 	if False:
@@ -577,7 +636,7 @@ def param_graph_optimise(noise_fraction=0.0):
 
 
 
-def actually_optimise_params_noiseless(M, start_params=[1e4, 1e4, 1.8, 8.64, 14.4, -4], to_vary=(2,3,4,5), train_N=2**10, test_N=2**14):
+def actually_optimise_params_noiseless(M, start_params=[1e4, 1e4, 1.8, 8.64, 14.4, -4], to_vary=(2,3,4,5), train_N=2**10, test_N=2**14, print_res=True):
 
 	# params = 0-4: Component of state vector
 	# params = 5: regularisation
@@ -609,36 +668,97 @@ def actually_optimise_params_noiseless(M, start_params=[1e4, 1e4, 1.8, 8.64, 14.
 	res = scipy.optimize.minimize(to_optimise, params0, method="Nelder-Mead", callback=cb,
 								options={"disp" : True, "maxiter" : 3000, "fatol" : 1e-4})
 
-	print(res)
-	return param_lookup(res.x), res.fun
+	if print_res:
+		print(res)
+
+	return param_lookup(res.x), res.fun, res.message, res.nfev
 
 
-def create_optimal_fits():
-	
-	params = [1e5, 1e5, .3, 4.0, 20., -4]
+def create_optimal_nonlin_fits():
+
+	M_exps = [13, 14]#[5, 6, 7, 8, 9, 10, 11]
+
+
+	params = opt_results[-1] # [1e5, 1e5, .3, 4.0, 20., -1]
 	results = []
 
-	for M_exp in [7, 8, 9, 10, 11, 12, 13]: #
+	for i, M_exp in enumerate(M_exps):
 		M, N = 2**M_exp, 2**(M_exp+4)
 
-		if M_exp < 12:
-			params, f = actually_optimise_params_noiseless(M, params, train_N = N)
-			results.append([params, f])
+		if M_exp <= 12:
+			params, f, msg, evals = actually_optimise_params_noiseless(M, params, train_N=N, print_res=False)
+			results.append([params, f, msg, evals])
 
-		print("results so far: ###########################")
-		for row in results:
-			print(*row)
+			print("results so far: ###########################")
+			for row in results:
+				print(*row)
+			print("getting fit.")
 
-		print("getting fit.")
 		save_model_function(get_nonlinear_fit(N, M, params=params), f"nonlin_noiseless_{M_exp}_{M_exp+4}")
+		# save_model_function(get_nonlinear_fit(N, M, params=opt_results[i]), f"nonlin_noiseless_{M_exp}_{M_exp+4}")
 
+
+
+	# results so far: (5-12) ###########################
+	# 100000.0, 100000.0, 2.5636051761293346, 10.194329869708739, 38.60627651216437, -1.4615412974557698] 0.8935181844105925 Optimization terminated successfully. 482
+	# [100000.0, 100000.0, 0.5682138518280841, 8.392943330777053, 28.616384098618443, -2.600039477420786] 0.5747402428175139 Optimization terminated successfully. 197
+	# [100000.0, 100000.0, 0.38425180501864353, 6.886683497923468, 28.14657106948843, -3.025675652267809] 0.3600858933452549 Optimization terminated successfully. 238
+	# [100000.0, 100000.0, 0.30927512963021797, 4.612733144846214, 21.55584277251825, -6.202338442607367] 0.24086718389699033 Optimization terminated successfully. 186
+	# [100000.0, 100000.0, 0.2361459904426209, 3.680700742407869, 19.179522533757925, -7.509259600366734] 0.15212843103048765 Optimization terminated successfully. 162
+	# [100000.0, 100000.0, 0.20482006775634146, 3.4539124242260906, 15.544205881687411, -9.062133000902449] 0.07123510373679331 Optimization terminated successfully. 147
+	# [100000.0, 100000.0, 0.1777849629314689, 2.8184787674962353, 12.736700693041925, -12.222667617861262] 0.03202789664112534 Optimization terminated successfully. 198
+	# [100000.0, 100000.0, 0.1351635294710545, 2.2804776402899023, 9.935672409194662, -17.149617495473493] 0.014008829018339204 Optimization terminated successfully. 253
+
+
+
+warned_not_optimised = False
+def warn_not_optimised(M_exp):
+	global warned_not_optimised
+	if not warned_not_optimised:
+		print(f"M=2**{M_exp}: not an optimised fit")
+		warned_not_optimised = True
+
+def get_optimal_nonlin_fit(M_exp, log=False, return_properties=False):
+
+	M_exp = int(M_exp)
+	M_exps = [5, 6, 7, 8, 9, 10, 11, 12]
+
+
+	opt_params = [
+	[100000.0, 100000.0, 2.5636051761293346, 10.194329869708739, 38.60627651216437, -1.4615412974557698],
+	[100000.0, 100000.0, 0.5682138518280841, 8.392943330777053, 28.616384098618443, -2.600039477420786],
+	[100000.0, 100000.0, 0.38425180501864353, 6.886683497923468, 28.14657106948843, -3.025675652267809],
+	[100000.0, 100000.0, 0.30927512963021797, 4.612733144846214, 21.55584277251825, -6.202338442607367],
+	[100000.0, 100000.0, 0.2361459904426209, 3.680700742407869, 19.179522533757925, -7.509259600366734],
+	[100000.0, 100000.0, 0.20482006775634146, 3.4539124242260906, 15.544205881687411, -9.062133000902449],
+	[100000.0, 100000.0, 0.1777849629314689, 2.8184787674962353, 12.736700693041925, -12.222667617861262],
+	[100000.0, 100000.0, 0.1351635294710545, 2.2804776402899023, 9.935672409194662, -17.149617495473493]]
+
+	fits = [0.8935181844105925, 0.5747402428175139, 0.3600858933452549, 0.24086718389699033, 
+			0.15212843103048765, 0.07123510373679331, 0.03202789664112534, 0.014008829018339204,
+			0.010451618798334] # this final row for 13, fit to parameters of 12
+	
+	name = f"nonlin_noiseless_{M_exp}_{M_exp+4}"
+	try:
+		idx = M_exps.index(M_exp)
+
+		if return_properties:
+			return load_model_function(name, log=log), {"fit" : fits[idx], "params" : opt_params[idx]}
+		else:
+			return load_model_function(name, log=log)
+	except:
+		warn_not_optimised(M_exp)
+		if return_properties:
+			return fn, {"fit" : model_fit_score(fn), "params" : opt_params[-1]}
+		else:
+			return load_model_function(name, log=log)
 
 
 
 if __name__ == "__main__":
 
-	create_optimal_fits()
-	exit()
+	# create_optimal_nonlin_fits()
+	# exit()
 
 	# nonlinear_model_slice()
 
@@ -648,7 +768,7 @@ if __name__ == "__main__":
 	# GOOD_PARAMS + [GOOD_REG]
 	# actually_optimise_params_noiseless(M, IN, (2,3,4,5), train_N=16*M)
 
-	param_graph_optimise(0.0)
+	param_graphs(0.0)
 
 
 

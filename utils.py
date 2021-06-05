@@ -458,16 +458,16 @@ def axis_pi_multiples(axis_obj, minor=True):
 
 
 import dill
-def save_model_function(fn, fname):
-	print("saving model...")
+def save_model_function(fn, fname, log=True):
+	if log: print("saving model...")
 	with open("../saved/" + fname, "wb") as file:
 		s = dill.dump(fn, file)
-	print("saved.")
+	if log: print("saved.")
 
-def load_model_function(fname):
-	print("loading model...")
+def load_model_function(fname, log=True):
+	if log: print("loading model...")
 	with open("../saved/" + fname, "rb") as file:
 		f = dill.load(file)
-		print("loaded.")
+		if log: print("loaded.")
 	return f
 

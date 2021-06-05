@@ -120,8 +120,6 @@ def time_until_mismatch_plot(model_update_fn, max_it=100, oscillations=False, N_
 		else:
 			match_lens[0].append(n)
 
-
-
 		# if n >= 150:
 		# plot_rollout_comparison(state, rollout, nonlin_rollout, 100, t_step=.2)
 		# plt.plot([.2*n, .2*n], [-15, 15], "k--")
@@ -134,6 +132,9 @@ def time_until_mismatch_plot(model_update_fn, max_it=100, oscillations=False, N_
 		# x[np.isnan(x)] = 30
 
 
+	# print(match_lens)
+
+
 	N_bins = 25
 	hists = np.zeros((2, N_bins))
 
@@ -144,6 +145,9 @@ def time_until_mismatch_plot(model_update_fn, max_it=100, oscillations=False, N_
 	x = np.arange(len(hists[0,:])) * max_hist/len(hists[0,:])
 	width = max_hist/len(hists[0,:])
 
+	print(hists[0,:])
+	print(hists[1,:])
+
 	ax.bar(x, hists[0,:], width=width)
 	ax.bar(x, hists[1,:], bottom=hists[0,:], width=width)
 	# ax.bar(x, hists[2,:], bottom=hists[1,:]+hists[0,:], width=width)
@@ -151,26 +155,52 @@ def time_until_mismatch_plot(model_update_fn, max_it=100, oscillations=False, N_
 	# SCALE SO THAT TOTAL # RUNS ADDS TO 1?
 	ax.tick_params(left=False, labelleft=False)
 
-
 	# GET RID OF THIS?
 	# ax.set_xlim([-1, max_hist+1])
 
 
 
+def model_match_score(model_update_fn, frac=.95, thresh=.2, max_it=100, N_trials=200):
 
-def make_time_to_mismatch_plots():
+	ns = []
+	for j in range(N_trials):
+		state = rand_state4(P_RANGE4)
+		while get_tot_state_energy(state) > 15**2/48:
+			state = rand_state4(P_RANGE4)
 
-	fig, ax = plt.subplots(2, 2)
+		n, f_state, n_c = rollout_until_mismatch(model_update_fn, state, max_it=max_it, threshold=thresh, identify_n_cycles=True)
+		ns.append(n+1) # for scores between 0 and 1
+	
+
+	# all counts are +1 currently
+	hist, b_e = np.histogram(ns, bins=max(ns), range=(0,max(ns)))
+	cumdist = np.cumsum(hist)/np.sum(hist)
+
+	# print(hist)
+	# print(cumdist)
+
+	cumdist -= (1-frac)
+	idx = np.argmax(cumdist > 0)
+
+	if idx == 0:
+		return 0.
+	else:
+		return round(idx-(cumdist[idx])/(cumdist[idx] - cumdist[idx-1]), 2)
+
+
+
+def make_time_to_mismatch_plots(oscillations=False):
+
+	fig, ax = plt.subplots(2, 1, sharex=True)
 	ax = ax.flatten()
 	# ax = [ax]
 
-	for i, M_exp in enumerate([9,10,11,12]):
+	for i, M_exp in enumerate([9,11]):
 		print(i, M_exp)
 
-		nonlin_model = get_good_nonlinear_fit(2**M_exp, incl_f=True)
-
 		# time_until_mismatch_plot(to_update_fn(nonlin_model), ax=ax[i])
-		time_until_mismatch_plot(to_update_fn_w_action(nonlin_model), ax=ax[i], oscillations=False, N_trials=1000)
+		ax[i].set_title("$M=2^{"+ str(M_exp) +"}$")
+		time_until_mismatch_plot(to_update_fn_w_action(get_optimal_nonlin_fit(M_exp)), ax=ax[i], oscillations=oscillations, max_it=250, N_trials=1000)
 
 	plt.show()
 
@@ -178,23 +208,36 @@ def make_time_to_mismatch_plots():
 if __name__ == "__main__":
 
 
-	# make_time_to_mismatch_plots()
+	make_time_to_mismatch_plots(oscillations=True)
 
 
 	# exit()
 
 	lin_model = get_good_linear_fit()
 	n_lin_model = get_good_noisy_linear_fit(0.1)
-	nonlin_model = get_good_nonlinear_fit(2**11)
-	# nonlin_model = load_model_function("nonlin_16_12")
+	# nonlin_model = get_good_nonlinear_fit(2**11)
+	# nonlin_model = load_model_function("nonlin_16_12", log=False)
 
 
 	lin_rollout = generalised_rollout(lin_model)
 	n_lin_rollout = generalised_rollout(n_lin_model)
-	nonlin_rollout = generalised_rollout(nonlin_model)
+	# nonlin_rollout = generalised_rollout(nonlin_model)
 
+	for i in range(5):
+		print(i)
+		Ms = [5,6,7,8,9,10,11,12,13]
+		scores = []
+		for M in Ms:
+			s = model_match_score(to_update_fn_w_action(get_optimal_nonlin_fit(M)), frac=.9, thresh=0.2, max_it=12, N_trials=500)
+			scores.append(s)
 
+		plt.plot(np.power(2., Ms), scores, "kx", ls="")
+	plt.title("Iterations until 10\% of runs diverge")
+	plt.xlabel("Model M")
+	plt.semilogx()
+	plt.show()
 
+	exit()
 
 	# lin_model = get_good_linear_fit(incl_f=False)
 	# nonlin_model = get_good_nonlinear_fit(incl_f=False)
@@ -214,24 +257,24 @@ if __name__ == "__main__":
 	# comparison_plots()
 
 
-	while True:
-		state = rand_state4(P_RANGE4*0.5)
-		plot_rollout_comparison(state, rollout, nonlin_rollout, 100, t_step=.2)
-		plt.show()
+	# while True:
+	# 	state = rand_state4(P_RANGE4*0.5)
+	# 	plot_rollout_comparison(state, rollout, nonlin_rollout, 100, t_step=.2)
+	# 	plt.show()
 
 
 	while True:
 
 		# fig, ax = plt.subplots(2, 1)
 
-		state = rand_state4(P_RANGE4*0.5)
+		state = rand_state4(P_RANGE4*1.5)
 
 
 		# plt.sca(ax[0])
 		# plot_rollout_comparison(state, rollout, lin_rollout, 100, t_step=0.2)
 		plot_rollout_comparison(state, rollout, nonlin_rollout, 100, t_step=.2)
 
-		n, cycles = rollout_until_mismatch(to_update_fn_w_action(nonlin_model), state, max_it=100, threshold=.2, identify_n_cycles=True)
+		n, cycles, f = rollout_until_mismatch(to_update_fn_w_action(nonlin_model), state, max_it=100, threshold=.2, identify_n_cycles=True)
 		print(n, cycles)
 		plt.plot([.2*n, .2*n], [-15, 15], "k--")
 		# plt.sca(ax[1])

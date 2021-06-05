@@ -115,8 +115,9 @@ def rollout_until_mismatch_sim_1(model_update_fn, IC, max_search_window, thresho
 			if not matches[-1]:
 				break
 
-	N_matches = np.argmin(matches) # stops at first False
-	if N_matches == 0:
+
+	N_matches = np.argmin(matches)-1 # stops at first False, ignoring IC match
+	if N_matches == -1:
 		N_matches = max_it
 
 	return np.array(true_states), np.array(modelled_states), N_matches
@@ -178,7 +179,6 @@ def rollout_until_mismatch(model_update_fn, IC, threshold=0.1, max_it=50, identi
 
 	if identify_n_cycles:
 		max_idxs = np.array(argrelextrema(np.abs(true_states[:,3]), np.greater)[0])
-		# print("max_idxs", max_idxs)
 
 		if len(max_idxs) > 1:
 
@@ -186,7 +186,7 @@ def rollout_until_mismatch(model_update_fn, IC, threshold=0.1, max_it=50, identi
 			mean_cycle_length = 2.0*np.mean(max_idxs[1:] - max_idxs[:-1])
 			fraction = max_idxs[0]/mean_cycle_length	
 			# print(n_full_cycles, mean_cycle_length, fraction)
-
+			
 			return N_matches, final_state, n_full_cycles + fraction
 
 		else:
