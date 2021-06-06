@@ -372,7 +372,7 @@ def single_action_perf_comparison():
 
 	time2 = time.perf_counter() - t
 
-	print(time1/time2, "times faster")
+	print(time1/time2, f"times faster ({time1:.4f}ms, {time2:.4f}ms)")
 
 
 	# t = time.perf_counter()

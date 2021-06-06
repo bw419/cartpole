@@ -186,7 +186,7 @@ def rollout_until_mismatch(model_update_fn, IC, threshold=0.1, max_it=50, identi
 			mean_cycle_length = 2.0*np.mean(max_idxs[1:] - max_idxs[:-1])
 			fraction = max_idxs[0]/mean_cycle_length	
 			# print(n_full_cycles, mean_cycle_length, fraction)
-			
+
 			return N_matches, final_state, n_full_cycles + fraction
 
 		else:
@@ -280,8 +280,8 @@ def plot_rollout_comparison(IC, rollout, model_fn, N=50, remap=True, t_step=0.2,
 
 
 # states can be a 4-vector or 5-vector
-def plot_states(states, actions=None, ax=None, show_F=True, markers=True):
-	standalone_fig = False
+def plot_states(states, actions=None, ax=None, show_F=True, markers=True, standalone_fig=False):
+
 	if ax is None:
 		ax = plt.gca()
 		standalone_fig = True
@@ -296,18 +296,21 @@ def plot_states(states, actions=None, ax=None, show_F=True, markers=True):
 	for j in range(4):
 		p = ax.plot(T, states[:,j], label=VAR_STR[j])
 		if markers:
-			ax1.plot(T, states[:,4], lw=0, c=p[0].get_color(), marker="s", ms=3, mew=1, mec="k", mfc=p[0].get_color())
+			ax.plot(T, states[:,j], lw=0, c=p[0].get_color(), marker="s", ms=3, mew=1, mec="k", mfc=p[0].get_color())
 
+
+	if show_F:
+		ax.plot(0, np.nan, label=VAR_STR[4])
 
 	#ax.set_title(r"Modelled trajectory"))
 	ax.set_xlabel("Time (s)", labelpad=2.0)
-	ax.set_ylabel("Variable value", va="top")
+	ax.set_ylabel("State variable value")
 
 	if standalone_fig:
 		plt.legend(loc="upper right")
 
 	max_var = np.max(np.abs(states[:,:4]))
-	ax.set_ylim([-max_var, max_var])
+	ax.set_ylim([-max_var*1.1, max_var*1.1])
 
 	if show_F:
 
@@ -317,10 +320,11 @@ def plot_states(states, actions=None, ax=None, show_F=True, markers=True):
 			ax1.plot(T, states[:,4], lw=0, c=p[0].get_color(), marker="s", ms=3, mew=1, mec="k", mfc=p[0].get_color())
 
 		max_f = np.max(np.abs(states[:,4]))
-		ax1.set_ylim([-max_f, max_f])
+		ax1.set_ylim([-max_f*1.1, max_f*1.1])
 
+	ax1.set_ylabel("Force value")
 
 	if standalone_fig:
 		plt.gcf().set_size_inches((4.8, 4.0))
 		plt.grid(which="both", alpha=0.2)
-		plt.legend(loc="lower right")
+		# plt.legend(loc="lower right")

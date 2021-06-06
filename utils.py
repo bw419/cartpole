@@ -195,7 +195,7 @@ def function_scan(fn, idx, N, bound=None, start=None):
 
 
 # can be changed to use variable_scan_2d
-def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None, NX=50, NY=50, NS=8, ax=None, cb=True, incl_f=True, pi_multiples=True, levels=None):
+def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None, NX=50, NY=50, NS=8, ax=None, cb=True, incl_f=True, pi_multiples=True, levels=None, cmap="viridis", filled=True):
 
 	if ax is None:
 		ax = plt.gca()
@@ -240,9 +240,16 @@ def contour_plot(fn_to_plot, start_state=None, bounds=None, xi=2, yi=3, si=None,
 				
 
 	if levels is None:
-		im = ax.contourf(X, Y, Z)
+		if filled:
+			im = ax.contourf(X, Y, Z, cmap=cmap)
+		else:
+			im = ax.contour(X, Y, Z, cmap=cmap)
 	else:
-		im = ax.contourf(X, Y, Z, levels=levels)
+		if filled:
+			im = ax.contourf(X, Y, Z, levels=levels, cmap=cmap)
+		else:
+			im = ax.contour(X, Y, Z, levels=levels, cmap=cmap)
+
 	ax.set_xlabel(VAR_STR[xi])
 	ax.set_ylabel(VAR_STR[yi])
 
@@ -380,22 +387,29 @@ def show_matrix(M, zero_range = 0, title="", x="", y="", axes=True, div=True, cm
 
 
 
-def six_planes(fn, varying_bounds=False, **kwargs):
+def six_planes(fn, varying_bounds=False, cb=True, axs=None, **kwargs):
 
 	# this order ensures axis overdots are in good positions:
 	comb_order = ((0, 1), (0, 2), (1, 2), (1, 3), (3, 0), (3, 2))
-	fig, axs = plt.subplots(2, 3)
-	axs = axs.flatten()
+	if axs is None:
+		fig, axs = plt.subplots(2, 3)
+		axs = axs.flatten()
+
 	for i, (xi, yi) in enumerate(comb_order):
-		print(xi, yi)
+		print(f"{xi}, {yi} ({i})\r", end="")
 		im=contour_plot(fn, xi=xi, yi=yi, ax=axs[i], cb=False, **kwargs)
 		if i%3 or varying_bounds:
 			axs[i].tick_params(left=False, which="both", labelleft=False)
 		if i<3 or varying_bounds:
 			axs[i].tick_params(bottom=False, which="both", labelbottom=False)
-		axs[i].scatter(kwargs["start_state"][xi], kwargs["start_state"][yi], c="r", marker="x")
-	mappable = plt.cm.ScalarMappable(norm=Normalize(-18, 0), cmap="viridis")
-	plt.colorbar(mappable, ax=axs)
+		axs[i].scatter(kwargs["start_state"][xi], kwargs["start_state"][yi], c="r", marker="x", zorder=10)
+
+	if cb:
+		cmap = kwargs["cmap"] if "cmap" in kwargs else "viridis"
+		mappable = plt.cm.ScalarMappable(norm=Normalize(kwargs["levels"][0], kwargs["levels"][-1]), cmap=cmap)
+		plt.colorbar(mappable, ax=axs)
+
+	return axs
 
 
 
@@ -470,4 +484,17 @@ def load_model_function(fname, log=True):
 		f = dill.load(file)
 		if log: print("loaded.")
 	return f
+
+def save_data(data, fname, log=False):
+	if log: print("saving data...")
+	with open("../saved/" + fname, "wb") as file:
+		s = dill.dump(data, file)
+	if log: print("saved.")
+
+def load_data(fname, log=False):
+	if log: print("loading data...")
+	with open("../saved/" + fname, "rb") as file:
+		data = dill.load(file)
+		if log: print("loaded.")
+	return data
 
