@@ -24,12 +24,23 @@ def target_training_data(N=512, t_step=0.2, sobol=True, incl_f=True):
 	return X, Y
 
 
+def corrupt_msmt(x, obs_noise_fraction=None):
+	if obs_noise_fraction is None:
+		return x
+	else:
+		return x + np.random.normal(scale=obs_noise_fraction*P_RANGE4)
 
-def corrupt_single(X, Y, obs_noise=None, obs_bias=None, dyn_noise=None, dyn_bias=None):
+def corrupt_force(f, obs_noise_fraction=None):
+	if obs_noise_fraction is None:
+		return f
+	else:
+		return f + np.random.normal(scale=obs_noise_fraction*P_RANGE5[4])
 
-	return corrupt(X, Y, obs_noise, obs_bias, dyn_noise, dyn_bias, len(X))
+def corrupt_single(X, Y, obs_noise=None):
 
-def corrupt(X, Y, obs_noise=None, obs_bias=None, dyn_noise=None, dyn_bias=None, N_X_cmpts=None):
+	return corrupt(X, Y, obs_noise, len(X))
+
+def corrupt(X, Y, obs_noise=None, obs_bias=None, N_X_cmpts=None):
 
 	if N_X_cmpts is None:
 		N_X_cmpts = X.shape[1]
@@ -52,12 +63,12 @@ def corrupt(X, Y, obs_noise=None, obs_bias=None, dyn_noise=None, dyn_bias=None, 
 
 
 # enforces lack of dependence on theta or x
-def linear_fit(N=1024, t_step=0.2, sobol=True, return_data=False, incl_f=True, enforce_constraints=True, obs_noise=None, obs_bias=None, dyn_noise=None, dyn_bias=None):
+def linear_fit(N=1024, t_step=0.2, sobol=True, return_data=False, incl_f=True, enforce_constraints=True, obs_noise=None, dyn_noise=None):
 	
 	X, Y = target_training_data(N, t_step, sobol, incl_f)
 	C = np.zeros((4, X.shape[1]))
 
-	nX, nY = corrupt(X, Y, obs_noise, obs_bias, dyn_noise, dyn_bias)
+	nX, nY = corrupt(X, Y, obs_noise)
 
 	nonzero_cols = (0,1,3)
 	if incl_f:
@@ -95,10 +106,10 @@ def get_good_linear_fit(return_data=False, enforce_constraints=True, incl_f=True
 
 
 
-def get_good_noisy_linear_fit(noise_fraction, N=2**12, incl_f=True):
+def get_good_noisy_linear_fit(obs_noise=noise_fraction*P_RANGE5, dyn_noise=None, N=2**12, incl_f=True):
 
 	C = linear_fit(N=N, return_data=False, sobol=True, incl_f=incl_f, enforce_constraints=False,
-					obs_noise=noise_fraction*P_RANGE5, obs_bias=None, dyn_noise=None, dyn_bias=None)
+					obs_noise=noise_fraction*P_RANGE5, dyn_noise=dyn_noise)
 
 	def fn(x):
 		return C @ x
@@ -137,9 +148,9 @@ def convergences():
 	plt.figure()
 	lin_model_convergence(return_data=False, sobol=False, incl_f=True)
 	lin_model_convergence(return_data=False, sobol=False, incl_f=True,
-							obs_noise=0.2*P_RANGE5, obs_bias=None, dyn_noise=None, dyn_bias=None)
+							obs_noise=0.01*P_RANGE5, dyn_noise=None)
 	lin_model_convergence(return_data=False, sobol=False, incl_f=True,
-							obs_noise=0.4*P_RANGE5, obs_bias=None, dyn_noise=None, dyn_bias=None)
+							obs_noise=0.05*P_RANGE5, dyn_noise=None)
 	plt.show()
 
 
@@ -153,7 +164,7 @@ if __name__ == "__main__":
 	print(C1)
 
 	data, C2 = linear_fit(N=2048, return_data=True, sobol=True, incl_f=True, enforce_constraints=False,
-							obs_noise=0.1*P_RANGE5, obs_bias=None, dyn_noise=None, dyn_bias=None)
+							obs_noise=0.1*P_RANGE5, dyn_noise=None)
 	print(C2)
 	print("------")
 
@@ -161,6 +172,7 @@ if __name__ == "__main__":
 	X, Y, Xn, Yn = data
 
 	# convergences()
+
 
 	for k in range(4):
 		plt.figure()
@@ -171,7 +183,6 @@ if __name__ == "__main__":
 		print(Xn[:,k])
 		print("------")
 		print(Yn[:,k])
-
 
 
 		plt.figure()

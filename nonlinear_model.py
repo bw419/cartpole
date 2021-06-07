@@ -215,8 +215,7 @@ def get_good_nonlinear_fit(M=None, speed_tradeoff=True, ret_full_fit=True, retur
 
 def get_good_noisy_nonlinear_fit(noise_fraction, N=2**12, M=2**9, incl_f=True):
 
-	return get_nonlinear_fit(N, M, incl_f=incl_f, obs_noise=noise_fraction*P_RANGE5, 
-								obs_bias=None, dyn_noise=None, dyn_bias=None)
+	return get_nonlinear_fit(N, M, incl_f=incl_f, obs_noise=noise_fraction*P_RANGE5, dyn_noise=None)
 
 
 
@@ -631,7 +630,6 @@ def param_graphs(noise_fraction=0.0):
 
 	print(optima)
 	params = optima
-
 
 
 

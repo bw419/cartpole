@@ -1,5 +1,7 @@
 
 #include <stdio.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
 float state0 = 0.0;
@@ -7,90 +9,97 @@ float state1 = 0.0;
 float state2 = 0.0;
 float state3 = 0.0;
 
+float noise_std_dev = 0.0;
+
+
+void seed_random_generator() {
+/*    generator.seed(std::random_device{}()); */
+}
+
+void set_noise(float sigma) {
+	noise_std_dev = sigma;
+}
+
+
+float randn() {
+	if (noise_std_dev == 0.0) {
+		return 0.0;
+	}
+
+	float U1, U2, W, mult;
+	static float X1, X2;
+	static int call = 0;
+
+	if (call == 1)
+	{
+	  call = !call;
+	  return noise_std_dev * (float) X2;
+	}
+
+	do
+	{
+	  U1 = -1 + ((float) rand () / RAND_MAX) * 2;
+	  U2 = -1 + ((float) rand () / RAND_MAX) * 2;
+	  W = pow (U1, 2) + pow (U2, 2);
+	}
+	while (W >= 1 || W == 0);
+
+	mult = sqrt ((-2 * log (W)) / W);
+	X1 = U1 * mult;
+	X2 = U2 * mult;
+
+	call = !call;
+
+	return noise_std_dev * (float) X1;
+}
+
+
 void do_updates(float in_state0, float in_state1, float in_state2, float in_state3, float action) {
 
-    float force = 20.*tanh(action/20.);
-    float s, c, m, cart_accel, pole_accel;
 
-    // printf("args: %f %f %f %f %f \n", in_state0, in_state1, in_state2, in_state3, action);
+	float force = 20.*tanh(action/20.);
+	float s, c, m, cart_accel, pole_accel;
 
-    state0 = in_state0;
-    state1 = in_state1;
-    state2 = in_state2;
-    state3 = in_state3;
+	// printf("args: %f %f %f %f %f \n", in_state0, in_state1, in_state2, in_state3, action);
 
-    for (int it = 0; it < 50; ++it) {
-        s = sin(state2);
-        c = cos(state2);
-        m = 4.0-1.5*c*c;
-            
-        cart_accel = (.5*(state3*state3)*s+4*(force-.001*state1)-14.7*c*s+.012*state3*c)/m;
-        pole_accel = (-1.5*c*s*(state3*state3)-12*force*c+.012*state1*c-.096*state3+117.6*s)/m;
+	state0 = in_state0;
+	state1 = in_state1;
+	state2 = in_state2;
+	state3 = in_state3;
 
-        state1 += .004 * cart_accel;
-        state3 += .004 * pole_accel;
-        state2 += .004 * state3;
-        state0 += .004 * state1;
-    }
+	for (int it = 0; it < 50; ++it) {
+		s = sin(state2);
+		c = cos(state2);
+		m = 4.0-1.5*c*c;
+			
+		cart_accel = (.5*(state3*state3)*s+4*(force-.001*state1)-14.7*c*s+.012*state3*c)/m + 16.0 * randn();
+		pole_accel = (-1.5*c*s*(state3*state3)-12*force*c+.012*state1*c-.096*state3+117.6*s)/m + 41.6 * randn();
+
+		state1 += .004 * cart_accel;
+		state3 += .004 * pole_accel;
+		state2 += .004 * state3;
+		state0 += .004 * state1;
+	}
 }
 
 float get_state0() {
-    return state0;
+	return state0;
 }
 
 float get_state1() {
-    return state1;
+	return state1;
 }
 
 float get_state2() {
-    return state2;
+	return state2;
 }
 
 float get_state3() {
-    return state3;
+	return state3;
 }
 
 
-float c1 = 0;
-float c2 = 0;
-float c3 = 0;
-float c4 = 0;
-float c5 = 0;
 
-void set_biases(float _b1, float _b2, float _b3, float _b4, float _b5) {
-    c1 = 1 + _b1;
-    c2 = 1 + _b2;
-    c3 = 1 + _b3;
-    c4 = 1 + _b4;
-    c5 = 1 + _b5;
-}
-
-void do_noisy_updates(float in_state0, float in_state1, float in_state2, float in_state3, float action) {
-
-    float force = 20.*tanh(action/20.);
-    float s, c, m, cart_accel, pole_accel;
-
-    // printf("args: %f %f %f %f %f \n", in_state0, in_state1, in_state2, in_state3, action);
-
-    state0 = in_state0;
-    state1 = in_state1;
-    state2 = in_state2;
-    state3 = in_state3;
-
-    for (int it = 0; it < 50; ++it) {
-        s = sin(state2);
-        c = cos(state2);
-        m = 4.0*c5-1.5*c*c;
-            
-        cart_accel = (.5*(state3*state3)*s+4*(force*c2-.001*state1*c3)-14.7*c*s*c1+.012*state3*c*c4)/m;
-        pole_accel = (-1.5*c*s*(state3*state3)-12*force*c*c2+.012*state1*c*c3-.096*state3*c4+117.6*s*c1)/m;
-
-        state1 += .004 * cart_accel;
-        state3 += .004 * pole_accel;
-        state2 += .004 * state3;
-        state0 += .004 * state1;
-    }
-}
 
 
 

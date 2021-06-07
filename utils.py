@@ -1,4 +1,5 @@
 from globals import *
+from cartpole import *
 
 # from os import urandom
 # seed = urandom(16)
@@ -119,6 +120,52 @@ def sobol_rand_state5(bounds=None):
 
 #########################################################
 
+
+
+
+
+if __name__ == "__main__":
+
+	N = 5000
+	deltas = np.zeros((4,N))
+	for i in range(N):
+		state = rand_state5()
+
+		set_dynamic_noise(0)
+		state1 = single_action5(state)
+
+		set_dynamic_noise(1)
+		state2 = single_action5(state)
+
+		deltas[:,i] = state1 - state2
+
+	print(np.std(deltas, axis=1))
+
+
+
+	deltas = np.zeros((4,N))
+	for i in range(N):
+		state = rand_state5()
+
+		set_dynamic_noise(0)
+		state1 = fast_single_action(state[:4], state[4])
+
+		set_dynamic_noise(1)
+		state2 = fast_single_action(state[:4], state[4])
+
+		deltas[:,i] = np.array(state1) - state2
+
+	print(np.std(deltas, axis=1))
+
+
+
+
+
+
+
+
+
+#########################################################
 
 
 def variable_scan(idx, N, bound=None, start=None):

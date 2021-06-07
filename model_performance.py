@@ -227,8 +227,8 @@ n_lin_model = get_good_noisy_linear_fit(1., N=2**6)
 
 def linear_convergence_w_noise():
 
-	exps = np.linspace(5, 12, 15)#15)
-	noise_vals = np.linspace(1., 0., 15)#15)
+	exps = np.linspace(5, 10, 15)#15)
+	noise_vals = np.linspace(1, 0., 15)#15)
 
 	cmap = cm.get_cmap("winter", 256)
 	cmap = cmap(np.linspace(0, 1, len(noise_vals)))
@@ -237,6 +237,7 @@ def linear_convergence_w_noise():
 
 
 	fig, axs = plt.subplots(2, 2)
+	plt.suptitle("Prediction RMSE in $f(X)$ vs $N$ and $\sigma_{obs}$, $N_{test}=2^{10}$", y=0.96)
 	axs = axs.flatten()
 	for i, exp in enumerate(exps):
 		y = np.zeros((len(exps), 4))
@@ -244,7 +245,7 @@ def linear_convergence_w_noise():
 		for j, noise_fraction in enumerate(noise_vals):
 			print(noise_fraction, int(2**exp))
 			n_lin_model = get_good_noisy_linear_fit(noise_fraction, int(2**exp))
-			rmse = get_rand_model_single_step_RMSE(n_lin_model, N=512)
+			rmse = get_rand_model_single_step_RMSE(n_lin_model, N=1024)
 			y[j,:] = rmse
 
 
@@ -257,7 +258,12 @@ def linear_convergence_w_noise():
 
 	mappable = plt.cm.ScalarMappable(norm=LogNorm(2**exps[0], 2**exps[-1]), cmap="winter")
 	divider = make_axes_locatable(axs[1])
-	cb = plt.colorbar(mappable, ax=axs)
+	cb = plt.colorbar(mappable, ax=axs, pad=0.1)
+	
+	for i, ax in enumerate(axs):
+		leg = ax.legend([VAR_STR[i]], loc="upper center", handlelength=0, handletextpad=0, fancybox=True)
+		leg.legendHandles[0].set_visible(False)
+
 
 	plt.plot()
 
@@ -288,7 +294,9 @@ def linear_convergence_w_noise():
 	plt.show()
 
 
-# linear_convergence_w_noise()
+linear_convergence_w_noise()
+plt.show()
+
 
 # nonlin_model = get_good_nonlinear_fit()
 nonlin_model = get_good_noisy_nonlinear_fit(0.0)
@@ -298,7 +306,7 @@ def noisy_target(state):
 	return corrupt_single(state, fast_target(state), obs_noise=0.1*P_RANGE5)[1]
 
 
-while True:
+while False:
 	start_state = rand_state5()
 	axs = plot_scan_matrix(fast_target, start_state=start_state)#, fmt="--")
 	# axs = plot_scan_matrix(noisy_target, start_state=start_state, fmt="--")

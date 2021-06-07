@@ -49,9 +49,17 @@ class CartPole:
 		# for plotting
 		self.cartwidth = 1.0
 		self.cartheight = 0.2
+		
+		self.dyn_noise1 = 0.0
+		self.dyn_noise2 = 0.0
 
 		if self.visual:
 			self.drawPlot()
+
+	def setDynamicNoise(self, dyn_noise):
+		self.dyn_noise1 = 16.0*dyn_noise
+		self.dyn_noise2 = 41.6*dyn_noise
+
 
 	def setState(self, state):
 		self.cart_location = state[0]
@@ -93,6 +101,7 @@ class CartPole:
 	# This is where the equations of motion are implemented
 	def performAction(self, action = 0.0):
 		# prevent the force from being too large
+
 		force = self.max_force * np.tanh(action/self.max_force)
 
 		# integrate forward the equations of motion using the Euler method
@@ -103,12 +112,12 @@ class CartPole:
 			
 
 			cart_accel = (2.0*(self.pole_length*self.pole_mass*(self.pole_velocity**2)*s+2*(force-self.mu_c*self.cart_velocity))\
-				-3.0*self.pole_mass*self.gravity*c*s + 6.0*self.mu_p*self.pole_velocity*c/self.pole_length)/m
+				-3.0*self.pole_mass*self.gravity*c*s + 6.0*self.mu_p*self.pole_velocity*c/self.pole_length)/m + np.random.normal(scale=self.dyn_noise1)
 			
 			pole_accel = (-3.0*c*2.0/self.pole_length*(self.pole_length/2.0*self.pole_mass*(self.pole_velocity**2)*s + force-self.mu_c*self.cart_velocity)+\
 				6.0*(self.cart_mass+self.pole_mass)/(self.pole_mass*self.pole_length)*\
 				(self.pole_mass*self.gravity*s - 2.0/self.pole_length*self.mu_p*self.pole_velocity) \
-				)/m
+				)/m + np.random.normal(scale=self.dyn_noise2)
 
 
 			# Update state variables
@@ -332,16 +341,23 @@ def intialise_cfuncs():
 	# print(func_names)
 	funcs = [getattr(fun, func_name) for func_name in func_names]
 
+	offset = 0
+
 	funcs[0].argtypes = [ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
 	# funcs[8].argtypes = [ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
 	for i in [1, 2, 3, 4]:#, 9, 10, 11, 12]:
 		funcs[i].restype = ctypes.c_float
 
+	funcs[7].argtypes = [ctypes.c_float]
 
 
 # def try_kfn(state, action):
 # 	funcs[8](ctypes.c_int(256), *[ctypes.c_float(x) for x in [state[0], state[1], state[2], state[3], action]])
 # 	return [x() for x in funcs[9:13]]
+
+def set_C_dynamic_noise(dyn_noise):
+	funcs[7](ctypes.c_float(dyn_noise))
+
 
 def fast_single_action(state, action=0.0):
 	funcs[0](*[ctypes.c_float(x) for x in [state[0], state[1], state[2], state[3], action]])
@@ -386,9 +402,20 @@ def single_action_perf_comparison():
 
 
 
+def set_dynamic_noise(dyn_noise=None):
+	if dyn_noise is None:
+		dyn_noise = 0.
+
+
+	sys.setDynamicNoise(dyn_noise)
+	set_C_dynamic_noise(dyn_noise)
+
+
+
 if __name__ == "__main__":
 	print("recompiling c.")
 	run(["cc", "-shared", "-o", "../libfun.so", "../cfuncs.cpp"])
+	
 	intialise_cfuncs()
 	single_action_perf_comparison()
 
