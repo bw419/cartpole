@@ -252,8 +252,8 @@ def nonlinear_model_slice():
 
 
 
-
-def optimise_nonlinear_fit(X, Y, test_X, test_Y, scan_vars, scan_ranges, fixed_vars, plot=True, log_scale=True, fixed_colours=True, force_colour=None, show_fixed=True, show_min=False, time_ax=None, override_label=None, show_train=True):
+# this function is an absolute state and very badly named but I'm in too deep
+def optimise_nonlinear_fit(X, Y, test_X, test_Y, scan_vars, scan_ranges, fixed_vars, plot=True, log_scale=True, fixed_colours=True, force_colour=None, show_fixed=True, show_min=False, time_ax=None, override_label=None, show_train=True, noiseless_test=None):
 
 	# scan_var = 0-4: Component of state vector
 	# scan_var = 5: regularisation
@@ -283,6 +283,7 @@ def optimise_nonlinear_fit(X, Y, test_X, test_Y, scan_vars, scan_ranges, fixed_v
 		y = np.zeros_like(scan_range)
 		y1 = np.zeros_like(scan_range)
 		y2 = np.zeros_like(scan_range)
+		y3 = np.zeros_like(scan_range)
 		for i, s in enumerate(scan_range):
 
 			curr_vars[s_idx] = s
@@ -295,6 +296,10 @@ def optimise_nonlinear_fit(X, Y, test_X, test_Y, scan_vars, scan_ranges, fixed_v
 
 			train = fit_errors(X, Y, fit_fn, int(curr_vars[6]))
 			test = data_errors(test_X, test_Y, fit_fn)
+
+			if noiseless_test is not None:
+				test1 = data_errors(noiseless_test[0], noiseless_test[1], fit_fn)
+				y3[i] = test1
 		
 			y[i] = test
 			y1[i] = train
@@ -312,6 +317,8 @@ def optimise_nonlinear_fit(X, Y, test_X, test_Y, scan_vars, scan_ranges, fixed_v
 				plt.plot(scan_range, y, c=colours[s_idx], label=label)
 				if show_train:
 					plt.plot(scan_range, y1, "--", lw=1, c=colours[s_idx])#, label=f"train, {s_idx}")
+				if noiseless_test is not None:
+					plt.plot(scan_range, y3, lw=1, c=colours[s_idx])
 				if show_fixed: 
 					plt.scatter(scan_range[fixed_idx], y[fixed_idx], marker="o", c=colours[s_idx])
 				if show_min: 
@@ -322,9 +329,11 @@ def optimise_nonlinear_fit(X, Y, test_X, test_Y, scan_vars, scan_ranges, fixed_v
 				if force_colour is not None:
 					p = plt.plot(scan_range, y, c=force_colour, label=label)
 				else:
-					p = plt.plot(scan_range, y, c=colours[s_idx], label=label)
+					p = plt.plot(scan_range, y)#, label=label)
 				if show_train:
 					plt.plot(scan_range, y1, "--", lw=1, c=p[0].get_color())#, label=f"train, {s_idx}")
+				if noiseless_test is not None:
+					plt.plot(scan_range, y3, lw=1, c=p[0].get_color())
 				if show_fixed: 
 					plt.scatter(scan_range[fixed_idx], y[fixed_idx], marker="o", c=p[0].get_color())
 				if show_min: 
@@ -334,8 +343,10 @@ def optimise_nonlinear_fit(X, Y, test_X, test_Y, scan_vars, scan_ranges, fixed_v
 
 			if log_scale:
 				plt.semilogx()
-			plt.legend()
+			# plt.legend()
 
+	if noiseless_test is not None:
+		return np.array(optima), optimal_score, y, y1, y2, y3
 	return np.array(optima), optimal_score, y, y1, y2
 
 
@@ -345,7 +356,7 @@ def model_fit_score(update_fn, N=2**14):
 
 
 
-def evaluate_nonlinear_fit_score(X, Y, test_X, test_Y, params):
+def evaluate_nonlinear_fit_score(X, Y, test_X, test_Y, params, ntestX=None, ntestY=None):
 
 	t0 = time.perf_counter()
 	fit_fn = nonlinear_fit(X, Y, params[5], params[:5], int(params[6]))
@@ -354,55 +365,142 @@ def evaluate_nonlinear_fit_score(X, Y, test_X, test_Y, params):
 	train = fit_errors(X, Y, fit_fn, int(params[6]))
 	test = data_errors(test_X, test_Y, fit_fn)
 	
-	return test, train, t1
+	if ntestX is not None:
+		ntest = data_errors(ntestX, ntestY, fit_fn)
+		return test, train, ntest, t1
+
+	else:
+		return test, train, t1
 
 
 
-def get_train_and_test_data(N_train, N_test, obs_noise=None):
 
-	X, Y, C = nonlinear_training_data(N_train, sobol=True, incl_f=True, obs_noise=None)
+def get_train_and_test_data(N_train, N_test, obs_noise=None, dyn_noise=None, ret_noiseless=False):
+
+	X, Y, C = nonlinear_training_data(N_train, sobol=True, incl_f=True, obs_noise=obs_noise, dyn_noise=dyn_noise)
 	
-	test_X, test_Y = target_training_data(N_test, sobol=False, incl_f=True)
-	test_X, test_Y = corrupt(test_X, test_Y, obs_noise=None)
+	set_dynamic_noise(dyn_noise)
+	test_X, test_Y = target_training_data(N_test, sobol=False, incl_f=True, range_factor=1.0)
+	set_dynamic_noise(0.)
+	test_X, test_Y = corrupt(test_X, test_Y, obs_noise=obs_noise)
 	test_Y -= test_X @ C.T
 
-	return X, Y, test_X, test_Y
+	if ret_noiseless:
+		ntest_X, ntest_Y = target_training_data(N_test, sobol=False, incl_f=True, range_factor=1.0)
+		ntest_Y -= ntest_X @ C.T
+		return X, Y, test_X, test_Y, ntest_X, ntest_Y
+
+	else:
+		return X, Y, test_X, test_Y
 
 
 
-def param_graphs(noise_fraction=0.0):
+
+def scores(M, reg, scales, N_train, N_test, obs_noise=None, dyn_noise=None):
+
+	X, Y, tX, tY, ntX, ntY = get_train_and_test_data(N_train, N_test, obs_noise=None, dyn_noise=None, ret_noiseless=True)
+	return evaluate_nonlinear_fit_score(X, Y, tX, tY, list(scales) + [reg, M], ntX, ntY)
+
+
+
+from matplotlib import rcParams as mpl_rcp
+from matplotlib import cycler as mpl_cycler
+
+def param_graphs(obs_f=0.0, dyn_f=0.0):
 	
-	obs_noise = noise_fraction*P_RANGE5
+	obs_noise = obs_f*P_RANGE5
 	SCAN_N = 20
 
 	# for the first few:
-	X, Y, test_X, test_Y = get_train_and_test_data(2**9, 2**12, obs_noise=obs_noise)
-	params = list(GOOD_PARAMS) + [1e-3, 256]
+
+	X, Y, test_X, test_Y = get_train_and_test_data(2**9, 2**12, obs_noise=obs_noise, dyn_noise=dyn_f)
+
+	nX, nY, ntX, ntY = get_train_and_test_data(2**9, 2**12)
+	noiseless_test = [ntX, ntY]
+	
+
+	params = list(INITIAL_GUESS) + [1e-3, 256]
+
 
 
 	# lambda plots vs noise level for observation random noise
-	if False:
-		plt.figure()
-		for noise_frac in np.linspace(0, .1, 7):
-			X, Y, test_X, test_Y = get_train_and_test_data(2**11, 2**12, obs_noise=noise_fraction*P_RANGE5)
+	def lambda_plot(ax=None, N_exp=9):
+		print("lambda scans!")
+		if ax is None:
+			plt.figure()
+		else:
+			plt.sca(ax)
+		axis = np.power(10, np.linspace(-4, 2, 10))
 
-			optima = optimise_nonlinear_fit(X, Y, test_X, test_Y, [5], [np.power(10, np.linspace(-4, 0, 50))], 
-											params, True, True, fixed_colours=False)
+		cmap = cm.get_cmap("hsv", 256)
+		cmap = cmap(np.linspace(.3, 1, len(axis)))
+		mpl_rcp['axes.prop_cycle'] = mpl_cycler(color=cmap) 
+		noise_axis = np.linspace(0, .25, 6)
+
+		for noise_frac in np.linspace(0, .25, 6):
+			X, Y, test_X, test_Y = get_train_and_test_data(2**N_exp, 2**12, obs_noise=None, dyn_noise=noise_frac*20)#noise_frac*P_RANGE5
+		
+			X1, Y1, noiseless_test_X, noiseless_test_Y  = get_train_and_test_data(2**N_exp, 2**12)
+			noiseless_test = [noiseless_test_X, noiseless_test_Y]
+
+
+			ret = optimise_nonlinear_fit(X, Y, test_X, test_Y, [5], [axis], 
+											params, False, True, fixed_colours=False, show_min=True, show_fixed=False,
+											override_label="$\sigma_{dyn}=" + f"{noise_frac:.2f}"+ "$",
+											noiseless_test=noiseless_test)
+
+			opt, opt_s, test, train, t, test_noiseless = ret
+			p = plt.plot(axis, test, "--", lw=1)
+			plt.plot(axis, test_noiseless, c=p[0].get_color())
+			plt.semilogx()
+
+
+		if ax is None:
+			plt.show()
+
+
+	def more_lambda():
+
+		plt.figure()
+		for noise_frac in np.linspace(0, .25, 6):
+			plt.plot(np.nan, np.nan, label="$\sigma_{dyn}=" + f"{noise_frac*20:.2f}"+ "$")
+		# plt.plot(np.nan, np.nan, "k", label="Noisy test RMSE")
+		# plt.plot(np.nan, np.nan, "k--", label="Noisy train RMSE")
+		# plt.plot(np.nan, np.nan, "k-:", label="Noiseless test RMSE")
+
+		plt.legend()
+
+		# lambda_plot(N_exp=9)
+		# lambda_plot(N_exp=13)
+		# lambda_plot(N_exp=17)
+
+
+
+		fig, axs = plt.subplots(2, 1, sharex=True)
+		lambda_plot(axs[0], 9)
+		lambda_plot(axs[1], 14)
+
 		plt.show()
+		return
+
+	# more_lambda()
 
 
 	def param_scans():
-		params_guess = list(INITIAL_GUESS) + [1e-4, 512]
-		params = list(GOOD_PARAMS) + [GOOD_REG, 512]
+		print("parameter scans!")
+		params_guess = list(INITIAL_GUESS) + [1e-4, 256]
+		# params = list(GOOD_PARAMS) + [GOOD_REG, 512]
 
 		# lambda scan with inital guess
-		if True:
+		if False:
 			plt.figure()
-			X, Y, test_X, test_Y = get_train_and_test_data(2**11, 2**12)
+			X, Y, test_X, test_Y = get_train_and_test_data(2**11, 2**12, obs_noise=obs_noise, dyn_noise=dyn_f)
 
 
-			optima = optimise_nonlinear_fit(X, Y, test_X, test_Y, [5], [np.power(10, np.linspace(-6, -1, 50))], 
+			ret = optimise_nonlinear_fit(X, Y, test_X, test_Y, [5], [np.power(10, np.linspace(-6, -1, 50))], 
 											params_guess, True, True, "$\lambda$")
+
+			# plt.plot(t, )
 
 			# optima = optimise_nonlinear_fit(X, Y, test_X, test_Y, [5], [np.power(10, np.linspace(-6, -1, 50))], 
 											# params, True, True, fixed_colours=False, force_colour="tab:pink", override_label="$\lambda$, ")
@@ -412,22 +510,26 @@ def param_graphs(noise_fraction=0.0):
 
 		# scans of scale parameters
 		if True:
-			X, Y, C = nonlinear_training_data(2**11, sobol=True, incl_f=True, obs_noise=obs_noise)
+			X, Y, test_X, test_Y = get_train_and_test_data(2**11, 2**12, obs_noise=obs_noise, dyn_noise=dyn_f)
+			# X, Y, C = nonlinear_training_data(2**11, sobol=True, incl_f=True, dyn_noise=dyn_noise)#  obs_noise=obs_noise, 
 
-			test_X, test_Y = target_training_data(2**12, sobol=False, incl_f=True)
-			test_X, test_Y = corrupt(test_X, test_Y, obs_noise=obs_noise)
-			test_Y -= test_X @ C.T
+			# set_dynamic_noise(dyn_noise)
+			# noiseless_test_X, noiseless_test_Y = target_training_data(2**12, sobol=False, incl_f=True)
+			# set_dynamic_noise(0.)
+			# test_X, test_Y = corrupt(noiseless_test_X, noiseless_test_Y, obs_noise=obs_noise)
+			# test_Y -= test_X @ C.T
 
 			plt.figure()
-			scan_range = np.power(10, np.linspace(-2, 3.1, 50))
+			scan_range = np.power(10, np.linspace(-2, 3.1, 20))
 			scan_ranges = [scan_range for i in range(5)]
-
+			plt.title("$\sigma_{dyn}=" + f"{dyn_f}$")
 			optimise_nonlinear_fit(X, Y, test_X, test_Y, range(5), scan_ranges, params_guess, True, True)
 		
-		plt.show()
+		# plt.show()
 
 
-	param_scans()
+	# param_scans()
+	# return
 
 	def N_M_scans():
 
@@ -441,8 +543,6 @@ def param_graphs(noise_fraction=0.0):
 
 			cmap = cm.get_cmap("hsv", 256)
 			cmap = cmap(np.linspace(.3, 1, len(exps)))
-			from matplotlib import rcParams as mpl_rcp
-			from matplotlib import cycler as mpl_cycler
 			mpl_rcp['axes.prop_cycle'] = mpl_cycler(color=cmap) 
 
 			markers = ["o", "x", "s"]
@@ -459,7 +559,7 @@ def param_graphs(noise_fraction=0.0):
 			M_lines = {i:[[], []] for i in [4,5,6,7,8,9,10,11]}
 
 			for i, exp in enumerate(vals): # best number is 10, takes a long time from 11. M should be as high as possible
-				X, Y, C = nonlinear_training_data(int(2**exp), sobol=True, incl_f=True)
+				X, Y, C = nonlinear_training_data(int(2**exp), sobol=True, incl_f=True, obs_noise=obs_noise)
 
 				M_exps = np.linspace(4, exp, 10)
 				M_axis = np.power(2, M_exps)
@@ -481,16 +581,14 @@ def param_graphs(noise_fraction=0.0):
 			plt.xlabel("Computation time (s)")
 			plt.show()
 
-		if False:
+		if True:
 
-			M_exps = [7,8,9,10]
-			N_exps = [7, 8, 9, 10, 11, 12, 13, 14, 15]
+			M_exps = [9, 10, 11]
+			N_exps = [11,12,13,14,15,16,17,18]
 
 
 			cmap = cm.get_cmap("hsv", 256)
 			cmap = cmap(np.linspace(.3, 1, len(M_exps)))
-			from matplotlib import rcParams as mpl_rcp
-			from matplotlib import cycler as mpl_cycler
 			mpl_rcp['axes.prop_cycle'] = mpl_cycler(color=cmap) 
 
 			markers = ["o", "x", "s"]
@@ -500,35 +598,64 @@ def param_graphs(noise_fraction=0.0):
 			plt.figure()
 
 			M_lines = [[] for x in M_exps]
+			M_lines1 = [[] for x in M_exps]
 			for i, exp in enumerate(N_exps): # best number is 10, takes a long time from 11. M should be as high as possible
-				X, Y, C = nonlinear_training_data(int(2**exp), sobol=True, incl_f=True)
 
-				max_M = min(i+1, len(M_exps))
+				X, Y, C = nonlinear_training_data(int(2**exp), sobol=True, incl_f=True, obs_noise=obs_noise, dyn_noise=dyn_f)
+
+				try:
+					max_M = M_exps.index(exp)
+				except:
+					max_M=len(M_exps)
+
+				if max_M == 0:
+					continue
+
 				M_axis = np.power(2., M_exps)[:max_M]
 
-				opt, opt_s, test, train, t =  optimise_nonlinear_fit(X, Y, test_X, test_Y, [6], [M_axis], 
-										params, False, True, False, show_fixed=False, show_min=False, time_ax=None, override_label=int(2**exp))
+				# print(exp, max_M, M_axis)
+
+				ret =  optimise_nonlinear_fit(X, Y, test_X, test_Y, [6], [M_axis], 
+											params, False, True, False, show_fixed=False, show_min=False, 
+											time_ax=None, override_label=int(2**exp),
+											noiseless_test=noiseless_test)
+				opt, opt_s, test, train, t, test_noiseless = ret
 
 				for j in range(max_M):
-					M_lines[j].append(test[j])
+					M_lines[j].append(test_noiseless[j])
+					M_lines1[j].append(test[j])
 				for j in range(max_M, len(M_exps)):
 					M_lines[j].append(np.nan)
+					M_lines1[j].append(np.nan)
+
+			for i in range(len(M_lines)):
+				print(M_lines[i])
+				print(M_lines1[i])
+
+			# best = [0.095]
+			best = [0.17, 0.095, 0.075]
+
 
 			for j, M_exp in enumerate(M_exps):
-				plt.plot(np.power(2., N_exps[j:]), M_lines[j][j:], label=f"M={int(2**M_exp)}")
-				plt.scatter(np.power(2., N_exps[j:]), M_lines[j][j:], marker="x", c="k", zorder=4)
-				plt.plot(np.power(2., N_exps[j:]), [M_lines[j][-1]]*len(M_lines[j][j:]), "k--")
+				try:
+					print(j, M_exp, N_exps[j:])
+					p = plt.plot(np.power(2., N_exps[j:]), M_lines[j][j:], label=f"M={int(2**M_exp)}")
+					plt.plot(np.power(2., N_exps[j:]), M_lines1[j][j:], "--", c=p[0].get_color())
+					plt.scatter(np.power(2., N_exps[j:]), M_lines[j][j:], marker="x", c="k", zorder=4)
+					plt.plot(np.power(2., N_exps[j:]), [best[j]]*len(M_lines[j][j:]), "k--")
+				except Exception as err:
+					print(err)
+				print(M_lines[j][-1])
 
 			plt.legend()
 			plt.semilogx()
-			plt.title("Fit quality vs N for various M")
+			plt.title("Fit quality vs N for various M, $\sigma_{dyn}=" + f"{dyn_f}" + "$")
 			plt.ylabel("Test data RMSE")
 			plt.xlabel("N")
-			plt.show()
 
+			# plt.show()
 
-
-		if True:
+		if False:
 			plt.figure()
 
 
@@ -558,7 +685,7 @@ def param_graphs(noise_fraction=0.0):
 			for i, M_exp in enumerate(M_exps):
 				N = int(2.**(M_exp+4))
 
-				X, Y, C = nonlinear_training_data(N, sobol=True, incl_f=True)
+				X, Y, C = nonlinear_training_data(N, sobol=True, incl_f=True, obs_noise=obs_noise)
 
 				t = time.perf_counter()
 				fit_fn = nonlinear_fit(X, Y, GOOD_REG, GOOD_PARAMS, int(2**M_exp))
@@ -605,7 +732,8 @@ def param_graphs(noise_fraction=0.0):
 			plt.title("Fit quality vs computation time (N=16M)")
 			plt.show()
 
-	# N_M_scans()
+	N_M_scans()
+	return 
 
 
 	if False:
@@ -632,16 +760,17 @@ def param_graphs(noise_fraction=0.0):
 	params = optima
 
 
-
-
-def actually_optimise_params_noiseless(M, start_params=[1e4, 1e4, 1.8, 8.64, 14.4, -4], to_vary=(2,3,4,5), train_N=2**10, test_N=2**14, print_res=True):
+# INITIAL_GUESS =  [10**3,10**3,1,3,20] 
+# default start_params [1e4, 1e4, 1.8, 8.64, 14.4, -4]
+def actually_optimise_params_noiseless(M, start_params=INITIAL_GUESS + [-2], to_vary=(2,3,4,5), train_N=2**10, test_N=2**14, obs_f=None, dyn_f=None, print_res=True, return_function=False):
 
 	# params = 0-4: Component of state vector
 	# params = 5: regularisation
 
-	X, Y, C = nonlinear_training_data(train_N, sobol=True, incl_f=True)
-	test_X, test_Y = target_training_data(test_N, sobol=False, incl_f=True)
-	test_Y -= test_X @ C.T
+
+	obs_noise = obs_f*P_RANGE5
+
+	X, Y, test_X, test_Y = get_train_and_test_data(train_N, test_N, obs_noise=obs_f*P_RANGE5, dyn_noise=dyn_f)
 
 
 	np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
@@ -656,7 +785,7 @@ def actually_optimise_params_noiseless(M, start_params=[1e4, 1e4, 1.8, 8.64, 14.
 
 	def to_optimise(params):
 		params = param_lookup(params) 
-		return data_errors(test_X, test_Y, nonlinear_fit(X, Y, np.power(10, params[5]), params[:5], M))
+		return data_errors(test_X, test_Y, nonlinear_fit(X, Y, np.power(10., params[5]), params[:5], M))
 	
 
 	def cb(x):
@@ -664,12 +793,25 @@ def actually_optimise_params_noiseless(M, start_params=[1e4, 1e4, 1.8, 8.64, 14.
 
 
 	res = scipy.optimize.minimize(to_optimise, params0, method="Nelder-Mead", callback=cb,
-								options={"disp" : True, "maxiter" : 3000, "fatol" : 1e-4})
+								options={"maxiter" : 3000, "fatol" : 1e-4})
 
 	if print_res:
-		print(res)
+		print(param_lookup(res.x), res.fun)
 
-	return param_lookup(res.x), res.fun, res.message, res.nfev
+	params1 = param_lookup(res.x)
+	fn = nonlinear_fit(X, Y, np.power(10., params1[5]), params1[:5], M)
+	nX, nY, ntX, ntY = get_train_and_test_data(train_N, test_N, obs_noise=None)
+	noiseless_fit = data_errors(ntX, ntY, fn)
+
+	if return_function:
+		return fn, params1, res.fun, noiseless_fit, res.message, res.nfev
+	else:
+		return params1, res.fun, noiseless_fit, res.message, res.nfev
+
+
+def create_optimal_fit(M, train_N=2**10, obs_f=None):
+	ret = actually_optimise_params_noiseless(M, train_N=train_N, obs_f=obs_f, return_function=True)
+	return ret[0], ret[1], ret[2]
 
 
 def create_optimal_nonlin_fits():
@@ -709,12 +851,109 @@ def create_optimal_nonlin_fits():
 
 
 
+def create_optimal_noisy_fits():
+
+	M_exp = 10 #11
+
+	sigma_obs_ax = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, .5]
+	sigma_dyn_ax = [0.02, 0.05, 0.1, 0.2, 0.5, 1., 2., 5., 10.]
+
+
+
+
+	params = [1e5, 1e5, .3, 4.0, 20., -3]
+	results = []
+
+	if False:
+		for i, noise in enumerate(sigma_obs_ax):
+		# for i, noise in enumerate(sigma_dyn_ax):
+			M, N = 2**M_exp, 2**(M_exp+6)
+
+
+			# params1, res.fun, noiseless_fit, res.message, res.nfev
+			params, fit1, fit2, msg, evals = actually_optimise_params_noiseless(M, params, train_N=N, 
+													print_res=False, return_function=False, 
+													obs_f=noise, dyn_f=0.0)
+													# obs_f=0.0, dyn_f=noise)
+
+			results.append([params, fit1, fit2, msg, evals])
+
+			print("results so far: ###########################")
+			for row in results:
+				print(*row)
+			print("getting fit.")
+
+			noise_str = str(sigma_obs_ax[i]).replace(".", "_")
+			# noise_str = str(sigma_dyn_ax[i]).replace(".", "_")
+			print(noise_str)
+			# save_model_function(get_nonlinear_fit(N, M, params=params, obs_noise=noise*P_RANGE5), f"nonlin_noisy_{M_exp}_{M_exp+6}_obs_{noise_str}")
+			save_model_function(get_nonlinear_fit(N, M, params=params, dyn_noise=noise), f"nonlin_noisy_{M_exp}_{M_exp+6}_dyn_{noise_str}")
+
+
+
+	sigma_obs_ps = [[100000.0, 100000.0, 0.20746952547879569, 3.2255525261913265, 16.401264590483326, -8.223714740430797],
+					[100000.0, 100000.0, 0.20685391185848268, 3.4583040948588812, 15.489906229927175, -8.54559518759132],
+					[100000.0, 100000.0, 0.21582199663233603, 3.3384907914411492, 15.936256035266862, -8.47508444907799],
+					[100000.0, 100000.0, 0.21532468122914722, 3.3508991449190475, 15.27284273364794, -8.803506958996023],
+					[100000.0, 100000.0, 0.21285916402516986, 3.529043179474634, 15.46340659202623, -8.978634859523698],
+					[100000.0, 100000.0, 0.29156506735439697, 4.183415391114394, 10.20485977879181, -9.511142500205942],
+					[100000.0, 100000.0, 0.25842825532785985, 5.734622514373541, 7.427117550967562, -9.086263301420786],
+					[100000.0, 100000.0, 1.0015617783412678, 11.08033575029842, 28.866734093942163, 0.31679770509720817],
+					[100000.0, 100000.0, 2.8124106999568834, 33.8133552445302, 44.46308125717164, -0.065959322556886]]
+
+	sigma_obs_fits = [[0.07318235864465265, 0.07150576129966375],
+						[0.07998015509134292, 0.07022527828523058],
+						[0.11882333621550238, 0.07082361050273389],
+						[0.20486119325478477, 0.07459120478414348],
+						[0.3893607006107528, 0.08650403375292093],
+						[0.9473045677832639, 0.1929175188176782],
+						[1.8412787443006478, 0.4334781600969593],
+						[4.034310917560231, 1.4325881438012071],
+						[6.930579469992963, 2.9424068376384036]]
+
+	sigma_dyn_ps = [[100000.0, 100000.0, 0.2042242218559962, 3.349669637243748, 15.884470236191232, -7.021705173068747],
+					[100000.0, 100000.0, 0.2048954541399077, 3.445830003179048, 15.728892768505286, -7.027785757770307],
+					[100000.0, 100000.0, 0.19736902431809022, 3.452992588900665, 16.20334891586571, -7.054462954962145],
+					[100000.0, 100000.0, 0.20139939205666557, 3.523906721092351, 15.586296986927099, -7.06021451883896],
+					[100000.0, 100000.0, 0.20944345774225165, 3.2431776433357915, 16.41344636048393, -6.9404370757248115],
+					[100000.0, 100000.0, 0.2677234399328853, 3.8347752126643866, 14.733759309513358, -6.289800515604641],
+					[100000.0, 100000.0, 0.2539708372201905, 3.963872806845731, 16.245235686813377, -5.658471932698257],
+					[100000.0, 100000.0, 0.38749677802214355, 9.369896177682845, 14.308866078627492, 0.12481871879545212],
+					[100000.0, 100000.0, 0.28051539942251996, 11.096214694298727, 17.58139945546847, 1.3472651711245796]]
+
+	sigma_dyn_fits = [[0.07205894063041607, 0.07065924731072026],
+						[0.07708657101948731, 0.07047070899440674],
+						[0.09669914872855934, 0.07171334553534904],
+						[0.14887480647381582, 0.0730995211646937],
+						[0.3376126521622893, 0.081033468551896],
+						[0.6581310968946876, 0.11143499651474775],
+						[1.326066827222177, 0.20290882483087425],
+						[3.2589424588435447, 0.4591737352279506],
+						[6.392704063601857, 0.8998807363353406]]
+
+
+
+	plt.plot(np.arange(9), [x[1] for x in sigma_dyn_fits])
+	plt.show()
+
+	for i, ps in enumerate(sigma_dyn_ps):
+		fit_fn = get_nonlinear_fit(2**16, 2**10, params=ps, dyn_noise=sigma_dyn_ax[i])
+
+		noise_str = str(sigma_dyn_ax[i]).replace(".", "_")
+		fname = f"nonlin_noisy_10_16_dyn_{noise_str}"
+		save_model_function(fit_fn, fname)
+	# for row in ...
+	# save ACTUAL noisy fit.
+
+
+
 warned_not_optimised = False
 def warn_not_optimised(M_exp):
 	global warned_not_optimised
 	if not warned_not_optimised:
 		print(f"M=2**{M_exp}: not an optimised fit")
 		warned_not_optimised = True
+
 
 def get_optimal_nonlin_fit(M_exp, log=False, return_properties=False):
 
@@ -752,8 +991,74 @@ def get_optimal_nonlin_fit(M_exp, log=False, return_properties=False):
 			return load_model_function(name, log=log)
 
 
+def manual_noisy_convergence_plots():
+
+	sigma_obs_ax = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, .5]
+	sigma_dyn_ax = [0.02, 0.05, 0.1, 0.2, 0.5, 1., 2., 5., 10.]
+
+	M_9_obs  = np.array([3, 3, 3, 5, 6, 6, 6, 6, 6])
+	M_10_obs = np.array([3, 3, 4, 6, 6, 6, 6, 5, 6])
+	M_11_obs = np.array([3, 4, 4, 6, 6, 6, 5, 5, 5])
+
+	M_9_dyn  = np.array([3, 3, 3, 3, 4, 6, 6, 7, 7])
+	M_10_dyn = np.array([3, 3, 3, 4, 5, 6, 6, 6, 6])
+	M_11_dyn = np.array([3, 3, 4, 5, 5, 5, 6, 6, 6])
+
+	cmap = cm.get_cmap("hsv", 256)
+	cmap = cmap(np.linspace(.3, 1, 3))
+	mpl_rcp['axes.prop_cycle'] = mpl_cycler(color=cmap) 
+
+
+	fig, axs = plt.subplots(1,2)
+
+	plt.suptitle("N value required for convergence vs. noise", y=.95)
+
+	plt.sca(axs[0])
+	plt.semilogx()
+	plt.xticks(sigma_obs_ax)
+
+	plt.ylabel("$\log_2{(N/M)}$")
+	plt.xlabel("$\sigma_{obs}$")
+
+	plt.plot(sigma_obs_ax, M_9_obs, ls="", marker="o", label="M=512")
+	plt.plot(sigma_obs_ax, M_10_obs, ls="", marker="^", label="M=1024")
+	plt.plot(sigma_obs_ax, M_11_obs, ls="", marker="x", label="M=2048")
+	plt.plot(sigma_obs_ax, np.mean([M_9_obs, M_10_obs, M_11_obs], axis=0), "k--")
+	plt.legend()
+
+	plt.sca(axs[1])
+	plt.semilogx()
+	plt.xticks(sigma_dyn_ax)
+
+	plt.ylabel("$\log_2{(N/M)}$")
+	plt.xlabel("$\sigma_{dyn}$")
+
+	plt.plot(sigma_dyn_ax, M_9_dyn, ls="", marker="o", label="M=512")
+	plt.plot(sigma_dyn_ax, M_10_dyn, ls="", marker="^", label="M=1024")
+	plt.plot(sigma_dyn_ax, M_11_dyn, ls="", marker="x", label="M=2048")
+	plt.plot(sigma_dyn_ax, np.mean([M_9_dyn, M_10_dyn, M_11_dyn], axis=0), "k--")
+	plt.legend()
+
+	plt.show()
+
+
 
 if __name__ == "__main__":
+
+	# create_optimal_noisy_fits()
+
+	while True:
+		# plot_scan_matrix(get_good_linear_fit(enforce_constraints=False), axs_in=ax)
+
+		start_state = rand_state5()
+		ax = plot_scan_matrix(target, start_state=start_state)
+		model_fn = get_optimal_nonlin_fit(12)
+		plot_scan_matrix(model_fn, axs_in=ax, start_state=start_state)
+		plt.suptitle("Nonlinear fit, single-variable scans, M=12")
+		plt.show()
+
+	exit()
+	# manual_noisy_convergence_plots()
 
 	# create_optimal_nonlin_fits()
 	# exit()
@@ -766,7 +1071,74 @@ if __name__ == "__main__":
 	# GOOD_PARAMS + [GOOD_REG]
 	# actually_optimise_params_noiseless(M, IN, (2,3,4,5), train_N=16*M)
 
-	param_graphs(0.0)
+
+	# axis = np.linspace(0, 0.01, 10)
+	# errors = []
+	# for dyn_f in axis:
+	# 	N_test = int((2**14)*(1 + 100*dyn_f*dyn_f))
+	# 	print(N_test)
+	# 	test, train, ntest, t = scores(2**6, GOOD_REG, GOOD_PARAMS, int(N_test), 2**12, obs_noise=None, dyn_noise=dyn_f)
+	# 	errors.append(ntest)
+	# plt.plot(axis, errors)
+	# plt.show()
+	# exit()
+
+	if False:
+		# param_graphs(0.0, 0.0)#0.05*20)
+		param_graphs(0.0, .005*20)#0.05*20)
+		param_graphs(0.0, .01*20)#0.05*20)
+		param_graphs(0.0, .025*20)#0.05*20)
+		param_graphs(0.0, .05*20)#0.05*20)
+		param_graphs(0.0, .1*20)#0.05*20)
+		param_graphs(0.0, .25*20)#0.05*20)
+		param_graphs(0.0, .5*20)#0.05*20)
+		# param_graphs(0.0, 0.05*20)#0.05*20)
+		# param_graphs(0.0, 0.1*20)#0.05*20)
+		plt.show()
+
+		exit()
+
+
+
+	# param_graphs(0.000)
+	# plt.show()
+	param_graphs(0.1)
+	# plt.show()
+
+	param_graphs(0.25)
+	# plt.show()
+
+	param_graphs(0.5)
+	# plt.show()
+
+	# param_graphs(0.05)
+	plt.show()
+
+	exit()
+
+
+
+	M=int(2**8)
+	nfs = np.linspace(0, 0.2, 10)
+	data = []
+	params = INITIAL_GUESS + [-2]
+	for noise_frac in nfs:
+		ret = actually_optimise_params_noiseless(M, start_params=params, train_N=2**10, obs_f=noise_frac, return_function=True)
+
+		fn, ps, fit, noiseless_fit = ret[:4]
+		params = ps
+		print(fit, noiseless_fit)
+
+		data.append({"obs_f" : noise_frac, "params" : ps, "fit_fn" : fn, "noisy_fit": fit, "fit" : noiseless_fit})
+
+
+	save_data(data, "M=2^8_noisy_nonlin_fits")# and N=2^10
+	load_data(data, "M=2^8_noisy_nonlin_fits")
+
+	plt.plot(nfs, [x["noisy_fit"] for x in data])
+	plt.plot(nfs, [x["fit"] for x in data])
+	plt.show()
+
 
 
 

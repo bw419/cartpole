@@ -12,8 +12,12 @@ float state3 = 0.0;
 float noise_std_dev = 0.0;
 
 
-void seed_random_generator() {
-/*    generator.seed(std::random_device{}()); */
+float RG_X1, RG_X2;
+int RG_call = 0;
+
+void seed_random_generator(unsigned int seed) {
+	RG_call = 0;
+	srand(seed);
 }
 
 void set_noise(float sigma) {
@@ -27,13 +31,12 @@ float randn() {
 	}
 
 	float U1, U2, W, mult;
-	static float X1, X2;
-	static int call = 0;
 
-	if (call == 1)
+
+	if (RG_call == 1)
 	{
-	  call = !call;
-	  return noise_std_dev * (float) X2;
+	  RG_call = !RG_call;
+	  return noise_std_dev * (float) RG_X2;
 	}
 
 	do
@@ -45,12 +48,12 @@ float randn() {
 	while (W >= 1 || W == 0);
 
 	mult = sqrt ((-2 * log (W)) / W);
-	X1 = U1 * mult;
-	X2 = U2 * mult;
+	RG_X1 = U1 * mult;
+	RG_X2 = U2 * mult;
 
-	call = !call;
+	RG_call = !RG_call;
 
-	return noise_std_dev * (float) X1;
+	return noise_std_dev * (float) RG_X1;
 }
 
 

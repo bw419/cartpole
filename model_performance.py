@@ -118,6 +118,7 @@ def nonlinear_fit_evaluate():
 # evaluate single step RMSE over random states
 def get_rand_model_single_step_RMSE(model_fn, N=2048, rand_range=P_RANGE5):
 
+
 	SE = 0.
 
 	for i in range(N):
@@ -227,8 +228,8 @@ n_lin_model = get_good_noisy_linear_fit(1., N=2**6)
 
 def linear_convergence_w_noise():
 
-	exps = np.linspace(5, 10, 15)#15)
-	noise_vals = np.linspace(1, 0., 15)#15)
+	exps = np.linspace(5, 15, 15)#15)
+	noise_vals = np.linspace(50, 0., 15)#15)
 
 	cmap = cm.get_cmap("winter", 256)
 	cmap = cmap(np.linspace(0, 1, len(noise_vals)))
@@ -244,8 +245,16 @@ def linear_convergence_w_noise():
 
 		for j, noise_fraction in enumerate(noise_vals):
 			print(noise_fraction, int(2**exp))
-			n_lin_model = get_good_noisy_linear_fit(noise_fraction, int(2**exp))
+
+
+			n_lin_model = get_good_noisy_linear_fit(N=int(2**exp), dyn_noise=noise_fraction)
+			# n_lin_model = get_good_noisy_linear_fit(obs_noise=noise_fraction, N=int(2**exp))
+
+
 			rmse = get_rand_model_single_step_RMSE(n_lin_model, N=1024)
+
+
+
 			y[j,:] = rmse
 
 
@@ -269,33 +278,139 @@ def linear_convergence_w_noise():
 
 	return
 	# this bit is out of favour
-	fig, axs = plt.subplots(2, 2)
-	axs = axs.flatten()
-	for i, noise_fraction in enumerate(noise_vals):
-		y = np.zeros((len(exps), 4))
+	# fig, axs = plt.subplots(2, 2)
+	# axs = axs.flatten()
+	# for i, noise_fraction in enumerate(noise_vals):
+	# 	y = np.zeros((len(exps), 4))
 
-		for j, exp in enumerate(exps):
-			print(noise_fraction, int(2**exp))
-			n_lin_model = get_good_noisy_linear_fit(noise_fraction, int(2**exp))
-			rmse = get_rand_model_single_step_RMSE(n_lin_model, N=512)
-			y[j,:] = rmse
-
-
-		for j in range(4):
-			axs[j].plot(2**exps, y[:, j], c=cmap[i], lw=2, alpha=1)
-			axs[j].plot([2**exps[0], 2**exps[-1]], [typical_values[j]]*2, "k--")
-			axs[j].semilogx()
-			axs[j].set_ylim(0, 2*typical_values[j])
-			if j % 2:
-				axs[j].yaxis.tick_right()
-
-	mappable = plt.cm.ScalarMappable(norm=Normalize(noise_vals[0], noise_vals[-1]), cmap="winter_r")
-	plt.colorbar(mappable, ax=axs)
-	plt.show()
+	# 	for j, exp in enumerate(exps):
+	# 		print(noise_fraction, int(2**exp))
+	# 		n_lin_model = get_good_noisy_linear_fit(noise_fraction, int(2**exp))
+	# 		rmse = get_rand_model_single_step_RMSE(n_lin_model, N=512)
+	# 		y[j,:] = rmse
 
 
-linear_convergence_w_noise()
-plt.show()
+	# 	for j in range(4):
+	# 		axs[j].plot(2**exps, y[:, j], c=cmap[i], lw=2, alpha=1)
+	# 		axs[j].plot([2**exps[0], 2**exps[-1]], [typical_values[j]]*2, "k--")
+	# 		axs[j].semilogx()
+	# 		axs[j].set_ylim(0, 2*typical_values[j])
+	# 		if j % 2:
+	# 			axs[j].yaxis.tick_right()
+
+	# mappable = plt.cm.ScalarMappable(norm=Normalize(noise_vals[0], noise_vals[-1]), cmap="winter_r")
+	# plt.colorbar(mappable, ax=axs)
+	# plt.show()
+
+
+def noisy_visualisation():
+
+
+
+	def visualise_noisy_target():
+
+		while True:
+			start_state = rand_state5()
+			axs = plot_scan_matrix(lambda x: target(x), start_state=start_state)
+
+			plt.suptitle("Variable scans of target function with $\sigma_{obs}=0.25$", y=0.94)
+			plot_scan_matrix(lambda x: corrupt_msmt(target(x), 0.1), start_state=start_state, axs_in=axs)
+			plt.show()
+
+		while False:
+			start_state = rand_state5()
+			set_dynamic_noise(0.)
+			axs = plot_scan_matrix(lambda x: fast_target(x), start_state=start_state)
+			set_dynamic_noise(5.)
+
+			plt.suptitle("Variable scans of target function with $\sigma_{dyn}=5$", y=0.94)
+			plot_scan_matrix(lambda x: fast_target(x), start_state=start_state, axs_in=axs)
+			plt.show()
+			set_dynamic_noise(0.)
+
+	# visualise_noisy_target()
+
+	def noisy_trajectories():
+		while True:
+			start_state = rand_state4()
+			states = generalised_rollout(target)(start_state, 20)
+
+			print(np.array(states))
+
+			axs = plot_states(states, show_F=False, markers=False)
+			axs = plot_states(corrupt_msmts(states, 0.25), show_F=False, line=False)
+			plt.title("Noise-corrupted rollout, $\sigma_{obs}=0.25$")
+
+			set_dynamic_noise(5.)
+			states1 = generalised_rollout(target)(start_state, 20)
+			set_dynamic_noise(0.)
+
+			plt.figure()
+			axs = plot_states(states, show_F=False, markers=False)
+			axs = plot_states(states1, show_F=False, line=False)
+			plt.title("Noise-corrupted rollout, $\sigma_{dyn}=5$")
+
+
+			# plt.title("Variable scans of target function with $\sigma_{obs}=0.25$", y=0.94)
+			# axs = plot_rollout(start_state, generalised_rollout(target))
+			plt.show()
+
+
+
+	noisy_trajectories()
+
+
+	def obs_vs_dyn_noise():
+
+		obs_axis = np.linspace(0.0001, 1, 100)
+		ratios = []
+		obss = []
+		dyns = [ ]
+		for obs_s in obs_axis:
+			N = 1000
+			errors1 = np.zeros((4, N))
+			errors2 = np.zeros((4, N))
+			for i in range(N):
+				x = rand_state5()
+				y = fast_target(x)
+				errors1[:,i] = corrupt_msmt(y, obs_s) - y
+
+				set_dynamic_noise(obs_s)
+				errors2[:,i] = fast_target(x) - y
+				set_dynamic_noise(0.)
+
+			o = np.std(errors1)
+			d = np.std(errors2)
+			ratios.append(d/o)
+			obss.append(o)
+			dyns.append(d)
+
+
+		ratios = np.array(ratios)
+		mean = np.mean(1/ratios)
+
+		plt.title("(RMSE due to $\sigma_{obs}$)/(RMSE due to $\sigma_{dyn}$)\nplotted for $\sigma_{obs}=\sigma_{dyn}=\sigma$")
+		plt.ylabel("RMSE ratio")
+		plt.xlabel("$\sigma$")
+		plt.ylim([0, 1.1*np.max(1/ratios)])
+		plt.plot(obs_axis, 1/ratios)
+		plt.plot([obs_axis[0], obs_axis[-1]], [18.3, 18.3], "k--", label=f"mean = {mean:.2f}")
+		# plt.plot(obs_axis, obss)
+		# plt.plot(obs_axis, dyns)
+		plt.legend(loc="lower right")
+
+
+	# obs_vs_dyn_noise()
+	# plt.show()
+
+
+
+# noisy_visualisation()
+# plt.show()
+
+
+# linear_convergence_w_noise()
+# plt.show()
 
 
 # nonlin_model = get_good_nonlinear_fit()
@@ -324,6 +439,7 @@ while False:
 
 # print("errors:")
 # print(get_rand_model_single_step_RMSE(lin_model))
+
 
 
 exit()

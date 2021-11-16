@@ -3,9 +3,9 @@ from utils import *
 from simulation_utils import *
 from cartpole import *
 from nonlinear_model import *
+from nonlinear_control_policy import *
 import collections
 from time import perf_counter
-
 
 single_action = fast_single_action
 
@@ -141,7 +141,7 @@ def policy_prototypes():
 # create a new policy function given a set of parameters.
 # using this formulation, the parameters are built in to the function
 # and don't need to be inefficiently passed to it every time.
-def get_policy_fn(param_object, which="linear", obs_noise_f=None, log=True):
+def get_policy_fn(param_object, which="linear", obs_noise_f=None):
 
 	if which == "linear":
 		# parameters are a simple 4-vector of linear coefficients
@@ -166,22 +166,28 @@ def get_policy_fn(param_object, which="linear", obs_noise_f=None, log=True):
 				return corrupt_force(np.dot(P, remapped_angle(corrupt_msmt(x, obs_noise_f)))*np.exp(-(it/50)**2), obs_noise_f) 
 
 
-	elif which == "nonlinear_1":
+	elif which == "nonlinear":
 		# parameters are more complex. W_elems has 10 elements, w_vector and basis_fn_centres have same number of elements.
-		basis_fn_centres, W_elems, w_vector = param_object
 
-		W_matrix = [[W_elems[0], W_elems[4], W_elems[7], W_elems[9]],
-					[W_elems[4], W_elems[1], W_elems[5], W_elems[8]],
-					[W_elems[7], W_elems[5], W_elems[2], W_elems[6]],
-					[W_elems[9], W_elems[8], W_elems[6], W_elems[3]]]
-		W_matrix = np.array([np.array(x) for x in W_matrix])
+		# return p1(*param_object)
+		# return p2(*param_object)
 
-		NONLIN_TEMP = np.zeros((len(w_vector), 4))
-
-		def p(x, it=None):
-			NONLIN_TEMP[:,:] = x - basis_fn_centres 
-			return np.dot(w_vector, np.exp(-0.5 * np.sum(NONLIN_TEMP * (W_matrix @ NONLIN_TEMP[:, :, np.newaxis])[:,:,0], axis=1)))
-
+		# return get_nonlin_policy(param_object)
+		# return get_nonlin_policy_A(*param_object)
+		# return get_nonlin_policy_B1(*param_object)
+		# return type_C_terms(*param_object)
+		# return get_nonlin_policy_C1(*param_object)
+		# return get_nonlin_policy_C2(*param_object)
+		# return get_nonlin_policy_C3(*param_object)
+		# return get_nonlin_policy_C4(*param_object)
+		# return get_nonlin_policy_C5(*param_object)
+		# return get_nonlin_policy_D1(*param_object)
+		# return type_E_terms(*param_object)
+		# return get_nonlin_policy_E1(*param_object)
+		# return get_nonlin_policy_E3(*param_object)
+		# return type_H_terms(*param_object)
+		# return type_I_terms(*param_object)
+		return full_policy1(*param_object)
 	else:
 		raise("policy type does not exist")
 
@@ -190,18 +196,25 @@ def get_policy_fn(param_object, which="linear", obs_noise_f=None, log=True):
 
 
 N_req_within_threshold_noisy = 25
-default_gains = np.array([2.2,7.4,4.1,8.7])
+default_gains_obs = np.array([2.2,7.4,4.1,8.7])
+default_gains_dyn = np.array([1.8,4.8,2.5,4.1])
 
-def policy_simulation(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True, ret_success=True, obs_noise_f=None, gains=None):
+def policy_simulation(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True, ret_success=True, obs_noise_f=None, dyn_noise_f=None, gains=None):
 
-	if obs_noise_f is not None:
+	if obs_noise_f is not None or dyn_noise_f is not None:
 		if gains is None:
-			gains = default_gains
+			if obs_noise_f is not None:
+				gains = default_gains_obs
+			if dyn_noise_f is not None:
+				gains = default_gains_dyn
+
+		noise = obs_noise_f if obs_noise_f is not None else dyn_noise_f
 
 		def success_criterion(states, it):
 			# global N_req_within_threshold_noisy
 			# print("converged yet?", np.mean(np.std(states[-N_req_within_threshold_noisy:], axis=0)/(P_RANGE4*gains)) )
-			return it >= N_req_within_threshold_noisy and np.mean(np.std(states[-N_req_within_threshold_noisy:], axis=0)/(P_RANGE4*gains)) < 1.5*obs_noise_f
+			return it >= N_req_within_threshold_noisy and np.mean(np.std(states[-N_req_within_threshold_noisy:], axis=0)/(P_RANGE4*gains)) < 1.5*noise
+
 	else:
 		def success_criterion(states, it):
 			return it >= 10 and np.mean(states[-10:]) < 1e-8
@@ -215,7 +228,13 @@ def policy_simulation(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True
 
 	for it in range(max_it):
 		# states.append(update_fn([states[-1][0], states[-1][1], states[-1][2], states[-1][3], actions[-1]]))
+		
+
+		set_dynamic_noise(dyn_noise_f)
 		states.append(update_fn(states[-1], actions[-1]))
+		set_dynamic_noise(0.0)
+		
+
 		# xpos_int[0] += 0.01*states[-1][0]
 		# states_int += 0.01*states[-1]
 		actions.append(policy_fn(states[-1], it))# + states_int))
@@ -282,11 +301,10 @@ def policy_loss(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True, log=
 
 
 
-
-
 # so that when there are mulitple runs, each has a different IC.
-def get_IC_gen_fn(IC_proportions, same_seed=False, add_pi=False):
+def get_IC_gen_fn(IC_proportions, same_seed=False, add_pi=False, offset=np.zeros(4)):
 	to_add = [0, 0, np.pi, 0] if add_pi else [0, 0, 0, 0]
+	to_add += np.array(offset)
 
 	def gen_IC():
 		return IC_proportions*rand_state4() + to_add
@@ -301,44 +319,52 @@ def get_IC_gen_fn(IC_proportions, same_seed=False, add_pi=False):
 	return gen_IC
 
 
-
+#seed ensures it's the same set of ICs/random numbers for optimisation.
 def policy_loss_N_runs(IC_gen_fn, loss_fn, update_fn, policy_fn, N_its, N_runs, log=True, seed=None):
 	if seed is not None:
 		np.random.seed(seed)
+		seed_C_noise(seed)
 	return sum([
 		policy_loss(IC_gen_fn(), loss_fn, update_fn, policy_fn, N_its, log=log)
 		for i in range(N_runs)
 		])/(N_runs)
 
 
+def policy_success(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True, obs_noise_f=None, dyn_noise_f=None):
+	return policy_simulation(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=stop_early, ret_success=True, obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f)[2]
 
-def policy_success(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=True, obs_noise_f=None):
-	return policy_simulation(IC, loss_fn, update_fn, policy_fn, max_it, stop_early=stop_early, ret_success=True, obs_noise_f=obs_noise_f)[2]
 
-
-def policy_success_rate(IC_gen_fn, loss_fn, update_fn, policy_fn, N_its, N_runs, obs_noise_f=None, gains=None):
+def policy_success_rate(IC_gen_fn, loss_fn, update_fn, policy_fn, N_its, N_runs, obs_noise_f=None, dyn_noise_f=None, gains=None):
 	return np.count_nonzero([
-		policy_simulation(IC_gen_fn(), loss_fn, update_fn, policy_fn, N_its, stop_early=True, ret_success=True, obs_noise_f=obs_noise_f, gains=gains)[2]
+		policy_simulation(IC_gen_fn(), loss_fn, update_fn, policy_fn, N_its, stop_early=True, ret_success=True, obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f, gains=gains)[2]
 		for i in range(N_runs)
 		])/(N_runs)
 
 
 # obtain a function mapping policy parameters to a loss value
-def get_policy_loss_fn(IC_gen_fn, loss_sig, model_fn, N_its, N_runs, which="linear", log=True, seed=False, obs_noise_f=None):
+def get_policy_loss_fn(IC_gen_fn, loss_sig, model_fn, N_its, N_runs, which="linear", log=True, seed=False, obs_noise_f=None, dyn_noise_f=None, loss_fn=None):
 	if seed:
 		seed = np.random.randint(0, 10000000)
 	else:
 		seed = None
-	if which == "linear":
+
+	if loss_fn is None:
 		def loss(P):
-			return policy_loss_N_runs(IC_gen_fn, get_loss_fn(loss_sig), model_fn, 
-										get_policy_fn(P, which, obs_noise_f=obs_noise_f),
-										N_its, N_runs, log=log, seed=seed)
-	elif which == "nonlinear_1":
-		def loss(centres, W_elems, w):
-			return policy_loss_N_runs(IC_gen_fn, get_loss_fn(loss_sig), model_fn, 
-										get_policy_fn((centres, W_elems, w), which, obs_noise_f=obs_noise_f),
-										N_its, N_runs, log=log, seed=seed)
+			set_dynamic_noise(dyn_noise_f)
+			L = policy_loss_N_runs(IC_gen_fn, get_loss_fn(loss_sig), model_fn, 
+									get_policy_fn(P, which, obs_noise_f=obs_noise_f),
+									N_its, N_runs, log=log, seed=seed)
+			set_dynamic_noise(0.)
+			return L
+	else:
+		def loss(P):
+			set_dynamic_noise(dyn_noise_f)
+			L = policy_loss_N_runs(IC_gen_fn, loss_fn, model_fn, 
+									get_policy_fn(P, which, obs_noise_f=obs_noise_f),
+									N_its, N_runs, log=log, seed=seed)
+			set_dynamic_noise(0.)
+			return L	
+
 	return loss
 
 
@@ -346,7 +372,7 @@ def get_policy_loss_fn(IC_gen_fn, loss_sig, model_fn, N_its, N_runs, which="line
 
 
 
-def probe_stability_region(P, dynamics_fn, success_threshold=1.0, N_axis=101, plot=True, delay_plot=False, obs_noise_f=None, stop_early=False, N_its=50, N_runs=50, gains=None):
+def probe_stability_region(P, dynamics_fn, success_threshold=1.0, N_axis=101, plot=True, delay_plot=False, obs_noise_f=None, dyn_noise_f=None, stop_early=False, N_its=50, N_runs=50, gains=None):
 
 	print("probing stability...\r", end="")
 	axis_vals = np.linspace(0., 1., N_axis)
@@ -360,12 +386,12 @@ def probe_stability_region(P, dynamics_fn, success_threshold=1.0, N_axis=101, pl
 			# print(IC_proportions)
 			success_rates[idx, i] = policy_success_rate(get_IC_gen_fn(IC_proportions), get_loss_fn(), dynamics_fn, 
 														get_policy_fn(P, which="linear", obs_noise_f=obs_noise_f), 
-														N_its, N_runs, obs_noise_f=obs_noise_f, gains=gains)
-			if success_rates[idx, i] < success_threshold:
-				break
+														N_its, N_runs, obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f, gains=gains)
+			# if success_rates[idx, i] < success_threshold:
+				# break
 
-		if plot:
-			plt.plot(axis_vals, success_rates[idx,:])
+		# if plot:
+			# plt.plot(axis_vals, success_rates[idx,:])
 
 	failures = success_rates[:4, :] < success_threshold
 
@@ -387,9 +413,9 @@ def probe_stability_region(P, dynamics_fn, success_threshold=1.0, N_axis=101, pl
 	for i, frac in enumerate(axis_vals):
 		success_rates[4, i] =  policy_success_rate(get_IC_gen_fn(thresholds[:4]*frac), get_loss_fn(), dynamics_fn, 
 												   get_policy_fn(P, which="linear", obs_noise_f=obs_noise_f),
-												   N_its, N_runs, obs_noise_f=obs_noise_f)
-		if success_rates[4, i] < success_threshold:
-			break
+												   N_its, N_runs, obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f, gains=gains)
+		# if success_rates[4, i] < success_threshold:
+			# break
 	
 	# print(success_rates[4])
 
@@ -397,6 +423,15 @@ def probe_stability_region(P, dynamics_fn, success_threshold=1.0, N_axis=101, pl
 
 	if thresholds[4] == 0 and success_rates[4][-1] == 1.0:
 		thresholds[4] = 1.0
+
+	plt.plot(axis_vals, success_rates[0,:], label=VAR_STR[0])
+	plt.plot(axis_vals, success_rates[1,:], label=VAR_STR[1])
+	plt.plot(axis_vals, success_rates[2,:], label=VAR_STR[2])
+	plt.plot(axis_vals, success_rates[3,:], label=VAR_STR[3])
+	plt.plot(axis_vals, success_rates[4,:], "k", label="overall")
+	plt.legend()
+	plt.show()
+
 
 	if plot:
 		# print(thresholds)
@@ -417,13 +452,13 @@ def probe_stability_region(P, dynamics_fn, success_threshold=1.0, N_axis=101, pl
 
 
 
-def optimise_linear_policy(IC_proportions, start_pos, dynamics_fn, N_its=20, N_runs=50, log=False, IC_gen_fn=None, obs_noise_f=None):
+def optimise_linear_policy(IC_proportions, start_pos, dynamics_fn, N_its=20, N_runs=50, log=False, IC_gen_fn=None, obs_noise_f=None, dyn_noise_f=None):
 
 	if IC_gen_fn is None:
 		IC_gen_fn = get_IC_gen_fn(IC_proportions)
 
 
-	loss_fn = get_policy_loss_fn(IC_gen_fn, GOOD_LOSS_SCALES, dynamics_fn, N_its, N_runs, seed=True, obs_noise_f=obs_noise_f)
+	loss_fn = get_policy_loss_fn(IC_gen_fn, GOOD_LOSS_SCALES, dynamics_fn, N_its, N_runs, seed=True, obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f)
 
 
 
@@ -526,34 +561,35 @@ def multi_IC_optimise(dynamics_fn, fname, rand=False):
 
 
 
-def get_robust_policy(dynamics_fn, N_runs=100, second_scale=2**-4, obs_noise_f=None, N_stability_runs=150, get_robustness=False):
+def get_robust_policy(dynamics_fn, N_runs=100, second_scale=2**-4, obs_noise_f=None, dyn_noise_f=None, N_stability_runs=150, get_robustness=False, plot=False):
 
-	P, loss = optimise_linear_policy(2**-10, GOOD_P, dynamics_fn, N_runs=N_runs, obs_noise_f=obs_noise_f)
-	# P, loss = optimise_linear_policy(2**-7, P, dynamics_fn, N_runs=100)
-	P, loss = optimise_linear_policy(second_scale, P, dynamics_fn, N_runs=N_runs, obs_noise_f=obs_noise_f)
+	P, loss = optimise_linear_policy(2**-10, GOOD_P, dynamics_fn, N_runs=N_runs, obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f)
+	if second_scale > 2**-6:
+		P, loss = optimise_linear_policy(2**-7, P, dynamics_fn, N_runs=100)
+	P, loss = optimise_linear_policy(second_scale, P, dynamics_fn, N_runs=N_runs, obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f)
 
 	if not get_robustness:
 		print(P, loss)
 		return P, loss
 
 
-	if obs_noise_f is not None:
+	if obs_noise_f is not None or dyn_noise_f is not None:
 		gains = get_noise_amplification(Pa, np.zeros(4), noise_f)
 
-		stability_thresholds = probe_stability_region(P, single_action, plot=False, obs_noise_f=obs_noise_f, N_its=50, N_runs=N_stability_runs, gains=gains)
+		stability_thresholds = probe_stability_region(P, single_action, plot=plot, obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f, N_its=50, N_runs=N_stability_runs, gains=gains)
 
 		print(P, loss, gains, stability_thresholds, np.prod(stability_thresholds))
 		return P, loss, gains, stability_thresholds
 
 	else:
-		stability_thresholds = probe_stability_region(P, single_action, plot=False, N_its=50, N_runs=N_stability_runs)
+		stability_thresholds = probe_stability_region(P, single_action, plot=plot, N_its=50, N_runs=N_stability_runs)
 
 		print(P, loss, stability_thresholds, np.prod(stability_thresholds))
 		return P, loss, stability_thresholds
 
 
 
-def linear_policy_contour_plots(model_fn, P=np.zeros(4), IC_proportions=.01, loss_scales=GOOD_LOSS_SCALES, N_runs=50, N_its=20, levels=np.linspace(-15, 0, 10), filled=True, cmap="viridis", axs=None, N=15, obs_noise_f=None):
+def linear_policy_contour_plots(model_fn, P=np.zeros(4), IC_proportions=.01, loss_scales=GOOD_LOSS_SCALES, N_runs=50, N_its=20, levels=np.linspace(-15, 0, 10), filled=True, cmap="viridis", axs=None, N=15, obs_noise_f=None, dyn_noise_f=None):
 	
 	# plt.title(f"x = {round(s, 1)}")
 
@@ -579,7 +615,7 @@ def linear_policy_contour_plots(model_fn, P=np.zeros(4), IC_proportions=.01, los
 			# plt.figure()
 
 			# OPTIMISING FOR ONLY THETA, THETA DOT: (ENSURE loss_fn(P) includes x,x dot part, and i.c. range is sensible)
-			policy_loss_fn = get_policy_loss_fn(IC_gen_fn, loss_scales1, single_action, N_its, N_runs, which="linear", obs_noise_f=obs_noise_f)
+			policy_loss_fn = get_policy_loss_fn(IC_gen_fn, loss_scales1, single_action, N_its, N_runs, which="linear", obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f)
 			contour_plot(policy_loss_fn, start_state=start_state, bounds=[[0, 0, -30, -10], [0, 0, 30, 10]], xi=2, yi=3, NX=N, NY=N, 
 						incl_f=False, pi_multiples=False, levels=levels, ax=axs[0], cmap=cmap, filled=filled, cb=False)
 			# plt.show()
@@ -604,7 +640,7 @@ def linear_policy_contour_plots(model_fn, P=np.zeros(4), IC_proportions=.01, los
 					# plt.figure()
 					start_state[3] = s
 				
-					policy_loss_fn = get_policy_loss_fn(IC_gen_fn, loss_scales1, single_action, N_its, N_runs, which="linear", obs_noise_f=obs_noise_f)		
+					policy_loss_fn = get_policy_loss_fn(IC_gen_fn, loss_scales1, single_action, N_its, N_runs, which="linear", obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f)		
 					contour_plot(policy_loss_fn, start_state=start_state, bounds=[[0, -5, 0, 0], [0, 5, 30, 0]], xi=1, yi=2, NX=N, NY=N,
 								incl_f=False, pi_multiples=False, levels=levels, ax=axs[1], cmap=cmap, filled=filled, cb=cbar)
 			
@@ -620,7 +656,7 @@ def linear_policy_contour_plots(model_fn, P=np.zeros(4), IC_proportions=.01, los
 					# plt.figure()
 
 					# OPTIMISING FOR FIRST 3:
-					policy_loss_fn = get_policy_loss_fn(IC_gen_fn, loss_scales1, single_action, N_its, N_runs, which="linear", obs_noise_f=obs_noise_f)		
+					policy_loss_fn = get_policy_loss_fn(IC_gen_fn, loss_scales1, single_action, N_its, N_runs, which="linear", obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f)		
 					contour_plot(policy_loss_fn, start_state=start_state, bounds=[[0, -1.0, 0, .7], [0, 2.5, 0, 4.3]], xi=1, yi=3, NX=N, NY=N,
 								incl_f=False, pi_multiples=False, levels=levels, ax=axs[2], cmap=cmap, filled=filled, cb=False)
 
@@ -640,7 +676,7 @@ def linear_policy_contour_plots(model_fn, P=np.zeros(4), IC_proportions=.01, los
 				# plt.title(s)
 				print(s)
 				## OPTIMISING FOR ALL 4:
-				policy_loss_fn = get_policy_loss_fn(IC_gen_fn, loss_scales, single_action, N_its, N_runs, which="linear", obs_noise_f=obs_noise_f)
+				policy_loss_fn = get_policy_loss_fn(IC_gen_fn, loss_scales, single_action, N_its, N_runs, which="linear", obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f)
 				def modified_loss_fn(P):
 					P[3] = 1.85 + 0.5*P[1]
 					return policy_loss_fn(P)
@@ -659,7 +695,7 @@ def linear_policy_contour_plots(model_fn, P=np.zeros(4), IC_proportions=.01, los
 	if False:
 		# Now, do contour plots about this global min.
 		start_state = P.copy()
-		policy_loss_fn = get_policy_loss_fn(IC_gen_fn, loss_scales, single_action, N_its, N_runs, which="linear", obs_noise_f=obs_noise_f)
+		policy_loss_fn = get_policy_loss_fn(IC_gen_fn, loss_scales, single_action, N_its, N_runs, which="linear", obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f)
 
 		# six_planes(policy_loss_fn, start_state=start_state, bounds=[25, 25, 25, 25], NX=40, NY=40, incl_f=False, pi_multiples=False, levels=levels)
 		six_planes(policy_loss_fn, start_state=start_state, varying_bounds=True, bounds=[[-10, -2, 5, 0], [5, 2, 25, 3]],
@@ -711,16 +747,16 @@ def policy_set_robustness_plot(data, re_probe=True):
 
 
 
-def quick_linear_policy_sim(P, IC, loss_sig, N_its=50, markers=False, obs_noise_f=None, which="linear", title="Control simulation"):
+def quick_linear_policy_sim(P, IC, loss_sig, N_its=50, markers=False, obs_noise_f=None, dyn_noise_f=None, which="linear", title="Control simulation"):
 	fig, ax = plt.subplots(1, 1)
 
 	loss_fn = get_loss_fn(loss_sig)
 	policy_fn = get_policy_fn(P, which=which, obs_noise_f=obs_noise_f)
 
-	states, actions, L = policy_simulation(IC, loss_fn, single_action, policy_fn, N_its, ret_success=True, stop_early=True, obs_noise_f=obs_noise_f)
+	states, actions, L = policy_simulation(IC, loss_fn, single_action, policy_fn, N_its, ret_success=True, stop_early=False, obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f)
 	plot_states(states, actions, ax=ax, show_F=True, markers=markers, standalone_fig=True)
 
-	y= 1e-8 if obs_noise_f is None else 10*obs_noise_f*np.mean(P_RANGE4)
+	# y= 1e-8 if obs_noise_f is None else 10*obs_noise_f*np.mean(P_RANGE4)
 	
 	plt.title(title)
 	print(L, len(states), P)
@@ -729,34 +765,40 @@ def quick_linear_policy_sim(P, IC, loss_sig, N_its=50, markers=False, obs_noise_
 	plt.show()
 
 
-def get_noise_amplification(P, IC, obs_noise_f, which="linear", model_fn=single_action):
+def get_noise_amplification(P, IC, obs_noise_f=None, dyn_noise_f=None, which="linear", model_fn=single_action, req_success=True):
 
 	global N_req_within_threshold_noisy
 
 	prev_val = N_req_within_threshold_noisy
 
-	N_req_within_threshold_noisy = 2000
+	N_req_within_threshold_noisy = 1000
 	N_its = N_req_within_threshold_noisy + 50
 
 	loss_fn = get_loss_fn(GOOD_LOSS_SCALES)
 	policy_fn = get_policy_fn(P, which=which, obs_noise_f=obs_noise_f)
-	states, actions, success = policy_simulation(IC, loss_fn, model_fn, policy_fn, N_its, ret_success=True, stop_early=True, obs_noise_f=obs_noise_f)
+
+	stop_early = req_success
+
+	states, actions, success = policy_simulation(IC, loss_fn, model_fn, policy_fn, N_its, ret_success=True, stop_early=stop_early, obs_noise_f=obs_noise_f, dyn_noise_f=dyn_noise_f)
 	
 	N_req_within_threshold_noisy = prev_val
 
-	if success:
+	if success or (not req_success):
 		out_noise = np.std(states[-450:], axis=0)/P_RANGE4
 
-		print("amplification:", out_noise/obs_noise_f)
-
-		return out_noise/obs_noise_f
+		if obs_noise_f is not None:
+			print("amplification:", out_noise/obs_noise_f)
+			return out_noise/obs_noise_f
+		if dyn_noise_f is not None:
+			print("amplification:", out_noise/dyn_noise_f)
+			return out_noise/dyn_noise_f
 	else:
 		print("simulation diverged.")
 		return None
 
 def rand_quick_runs(P=GOOD_P, IC_props=[.1,.1,.1,.1], **kwargs):
 	while True:
-		quick_linear_policy_sim(P, get_IC_gen_fn(IC_props)(), GOOD_LOSS_SCALES, 20, **kwargs)
+		quick_linear_policy_sim(P, get_IC_gen_fn(IC_props)(), GOOD_LOSS_SCALES, 50, **kwargs)
 
 
 def quick_success_rate(P, IC_props=[.1,.1,.1,.1], obs_noise_f=None):
@@ -791,9 +833,12 @@ if __name__ == "__main__":
 	# # print(data)
 	# row = data[3]
 	# # policy_set_robustness_plot(data, re_probe=False)
-	# rand_quick_runs(P=row0], IC_props=0.1, markers=True)
+	# rand_quick_runs(P=row[0], IC_props=0.1, markers=True)
 	# rand_quick_runs(P=row[0], IC_props=np.array(row[3:7])*row[7], markers=True)
-	# rand_quick_runs(P=BEST_P, IC_props=.2, markers=True)
+	# set_dynamic_noise(.1)
+	# rand_quick_runs(P=BEST_P, IC_props=0.1, obs_noise_f=0.0000, dyn_noise_f=0.01, markers=False, title="Control simulation, $\sigma_{dyn}=0.01$")
+	# rand_quick_runs(P=BEST_P, IC_props=0.1, obs_noise_f=0.0005, dyn_noise_f=0.00, markers=False, title="Control simulation, $\sigma_{obs}=5e-4$")
+	# set_dynamic_noise(.0)
 
 
 
@@ -813,32 +858,42 @@ if __name__ == "__main__":
 
 	def noisy_old_policy():
 
-		xs = np.array(np.linspace(-9, -6, 50))
-		# xs = np.array(np.linspace(-15, -5, 5))
+
+
+		# xs = np.array(np.linspace(-9, -6, 50))
+		xs = np.array(np.linspace(-6, 0, 50))
 		ys = []
 		amps = []
-		for exp in []:#xs:#[]:#xs:
+		for exp in []:#xs:#[]
 			# probe_stability_region(BEST_P, single_action, N_its=50, plot=True, obs_noise_f=2**exp, delay_plot=True)
 			# plt.title("$2^{" + str(exp) + "}$ or " + str(2**exp))
 
-			# amps.append(get_noise_amplification(BEST_P, get_IC_gen_fn(BEST_FIC)(), 2**exp, which="linear"))
+			# print(exp, 2**exp)
+			# amps.append(18*get_noise_amplification(BEST_P, get_IC_gen_fn(BEST_FIC)(), obs_noise_f=None, dyn_noise_f=2**exp, which="linear", req_success=False))
 		
 			# while True:
 			# 	quick_linear_policy_sim(BEST_P, get_IC_gen_fn(BEST_FIC)(), GOOD_LOSS_SCALES, N_its=50,
 			# 						 which="linear", obs_noise_f=2**exp, title="$\sigma_{obs}$ = " + f"{2**exp:.2e}")
 
-			thresholds = probe_stability_region(BEST_P, single_action, N_its=50, N_runs=100, plot=False, obs_noise_f=2**exp, stop_early=True)
+			# thresholds = probe_stability_region(BEST_P, single_action, success_threshold=.5, N_its=50, N_runs=100, plot=False, dyn_noise_f=2**exp, stop_early=True)
+			thresholds = probe_stability_region(BEST_P, single_action, success_threshold=1.0, N_its=50, N_runs=100, plot=False, dyn_noise_f=2**exp, stop_early=True)
 			print(thresholds, exp)
 			ys.append(thresholds)
 
+		# print(np.mean(amps, axis=0))
+		# print(np.std(amps, axis=0))
+		# exit()
 
-		# save_data([xs, ys], "best_noiseless_policy_in_noise1")
+
+		# save_data([xs, ys], "best_noiseless_policy_in_dyn_noise_successrate_1__3")
 		xs, ys = load_data("best_noiseless_policy_in_noise1")
 		xs = [2**x for x in xs]
 		zs = [np.product(y) for y in ys]
 
 		# print("xs, ys", xs, ys)
 
+		plt.title("Original policy robustness vs $\sigma_{obs}$ (s=100%)")
+		plt.xlabel("$\sigma_{obs}$")
 		plt.semilogx()
 		plt.ylabel("$f^1$ to $f'$")
 
@@ -880,28 +935,47 @@ if __name__ == "__main__":
 	# plt.show()
 
 
+	get_robust_policy(single_action, second_scale=2**-4, plot=True, get_robustness=True)
+	plt.show()
+	exit()
 
 	def noisy_optimisation():
 
-		noise_exps = np.arange(-10, -5, 0.5)
-		# IC_exps = np.arange(-10, -4, 1)
-		# noise_f = 0.005#2**-7
-		IC_scale = 2**-4
+
+
+
+		# noise_exps = np.arange(-6, 0, 0.5)
+		IC_exps = np.arange(-10, -4, 0.5)
+		# noise_f = 0.001#2**-7
+		IC_scale = 2**-7
 
 		# IC_gen_fn = get_IC_gen_fn(BEST_FIC)
 
 		noiseless_params = []
 		noisy_params = []
 
-		for noise_exp in []:# noise_exps:
-			noise_f = 2**(noise_exp)
-		# for IC_exp in []:#IC_exps:
+		# for noise_exp in noise_exps:
+			# noise_f = 2**(noise_exp)
+		# for IC_exp in IC_exps:
 			# IC_scale = 2.**(IC_exp)
+		sigma_obs_ax = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, .5]
+		sigma_dyn_ax = [0.02, 0.05, 0.1, 0.2, 0.5, 1., 2., 5., 10.]
+
+
+		for i, noise_f in enumerate(sigma_obs_ax):
 
 			results = [{}, {}]
 
-			Pa, La = get_robust_policy(single_action, second_scale=IC_scale, get_robustness=False)
-			Pb, Lb = get_robust_policy(single_action, second_scale=IC_scale, obs_noise_f=noise_f, get_robustness=False)
+
+			noise_str = str(noise_f).replace(".", "_")
+			fname = f"nonlin_noisy_10_16_obs_{noise_str}"
+			# fname1 = f"nonlin_noisy_10_16_dyn_{noise_str1}"
+
+			modelf = to_update_fn_w_action(load_model_function(fname, log=False))
+
+			Pa, La = get_robust_policy(modelf, second_scale=IC_scale, get_robustness=False)
+			Pb, Lb = get_robust_policy(modelf, second_scale=IC_scale, obs_noise_f=noise_f, get_robustness=False)
+			# Pb, Lb = get_robust_policy(modelf, second_scale=IC_scale, dyn_noise_f=noise_f, get_robustness=False)
 			results[0]["P"] = Pa
 			results[0]["L"] = La
 			results[1]["P"] = Pb
@@ -914,9 +988,11 @@ if __name__ == "__main__":
 
 				# print("P, L:", P, L)
 
-				gains = get_noise_amplification(P, np.zeros(4), noise_f)
-				# print("gains:", gains)
-				ts = probe_stability_region(P, single_action, plot=False, obs_noise_f=noise_f, N_its=50, N_runs=150, gains=gains)
+				# gains = get_noise_amplification(P, np.zeros(4), dyn_noise_f=noise_f, req_success=True)
+				gains = get_noise_amplification(P, np.zeros(4), obs_noise_f=noise_f, req_success=True)
+				print("gains:", gains)
+				ts = probe_stability_region(P, single_action, success_threshold=1, plot=False, obs_noise_f=noise_f, N_its=50, N_runs=150, gains=gains)
+				# ts = probe_stability_region(P, single_action, success_threshold=1, plot=False, dyn_noise_f=noise_f, N_its=50, N_runs=150, gains=gains)
 
 				results[i]["g"] = gains
 				results[i]["thresh"] = ts
@@ -928,24 +1004,32 @@ if __name__ == "__main__":
 			noisy_params.append(results[1])
 
 
-		save_data([noiseless_params, noisy_params], "trash")
-		# noiseless_params, noisy_params = load_data("fixed_noise_0_005_vs_f_IC")
-		noiseless_params, noisy_params = load_data("2^-4_optimised_vs_noise_3")
-		print(noisy_params)
+		save_data([noiseless_params, noisy_params], "noisy_models_obs")
+		# save_data([noiseless_params, noisy_params], "noisy_models_dyn")
+
+
+		noiseless_params, noisy_params = load_data("fixed_dyn_noise_0_1_vs_f_IC")
+		# noiseless_params, noisy_params = load_data("2^-7_optimised_vs_dyn_noise_1")
+
+
+		# noiseless_params, noisy_params = load_data("2^-7_optimised_vs_noise")
+		# noiseless_params, noisy_params = load_data("2^-4_optimised_vs_noise_successrate=0_5")
+		# print(noisy_params)
 		# noiseless_params, noisy_params = load_data("2^-4_optimised_vs_noise_attempt2")
 
-		# axis = 2**noise_exps
-		axis = 2.**np.arange(len(noisy_params))#IC_exps
+		# axis = 2.**noise_exps
+		axis = 2.**IC_exps#IC_exps
 
 		fig = plt.figure()
 
-		fig.suptitle("Policies optimised for $f_{IC}=2^{-7}$ vs. $\sigma_{obs}$")
+		# fig.suptitle("Policies optimised for $f_{IC}=2^{-7}$ vs. $\sigma_{dyn}$")
+		fig.suptitle("Policies optimised for $\sigma_{dyn}=0.1$ vs. $f_{IC}$")
 
 		axs = [fig.add_subplot(1, 4, 1)]
 		axs.append(fig.add_subplot(1, 4, 2, sharey=axs[-1]))
 		axs[-1].tick_params(labelleft=False)
-		axs.append(fig.add_subplot(1, 4, 4))
-		axs.append(fig.add_subplot(1, 4, 3, sharey=axs[-1]))
+		axs.append(fig.add_subplot(1, 4, 4, sharex=axs[0]))
+		axs.append(fig.add_subplot(1, 4, 3, sharey=axs[-1], sharex=axs[0]))
 		axs[-1].tick_params(left=False, labelleft=False, right=True, labelright=False)
 		axs[-2].tick_params(left=False, labelleft=False, right=True, labelright=True)
 
@@ -963,13 +1047,13 @@ if __name__ == "__main__":
 		axs[2].set_ylabel("$g_i$ (noise gains of policies)")
 		axs[2].yaxis.set_label_position("right")
 
-		# plot_targets(axs[0], axis)
-		# plot_targets(axs[1], axis)
+		plot_targets(axs[0], axis)
+		plot_targets(axs[1], axis)
 
 
 		fig1 = plt.figure()
 		axs = [fig1.add_subplot(1, 2, 1)]
-		axs.append(fig1.add_subplot(1, 2, 2))
+		axs.append(fig1.add_subplot(1, 2, 2, sharex=axs[-1]))
 		axs[-1].tick_params(left=False, labelleft=False, right=True, labelright=True)
 
 		axs[0].plot(axis, [np.product(x["thresh"]) for x in noiseless_params], c="k", ls="", marker="o")
@@ -1022,7 +1106,8 @@ if __name__ == "__main__":
 
 	def superposed_model_plots():
 		# n_f = 0.05 # levels = -1
-		n_f = 0.01 # levels = -3
+		n_f = 0.01 # levels = -3 OBS
+		n_f = .5 # levels = -3 DYN
 
 		print("doing contour plots")
 
@@ -1031,11 +1116,11 @@ if __name__ == "__main__":
 		# model_fn = to_update_fn_w_action(get_optimal_nonlin_fit(7))
 		N = 20
 
-		# axs= linear_policy_contour_plots(single_action, N_runs=50, levels=np.linspace(-12, 0, 10), N=N)
-		# plt.suptitle("")
-		# axs[1].set_title("Loss surfaces, $\sigma_{obs}=" + str(n_f) + "$, $f_{IC} = 0.01$")
-		# linear_policy_contour_plots(single_action, N_runs=50, levels=np.linspace(-3, 0, 10), filled=False, cmap="plasma", axs=axs, N=N, obs_noise_f=n_f)
-		# plt.show()
+		axs= linear_policy_contour_plots(single_action, N_runs=50, levels=np.linspace(-12, 0, 10), N=N)
+		plt.suptitle("")
+		axs[1].set_title("Loss surfaces, $\sigma_{dyn}=" + str(n_f) + "$, $f_{IC} = 0.01$")
+		linear_policy_contour_plots(single_action, N_runs=50, levels=np.linspace(-3, 0, 10), filled=False, cmap="plasma", axs=axs, N=N, dyn_noise_f=n_f)
+		plt.show()
 
 
 		P, L = optimise_linear_policy(0.001, GOOD_P_001, single_action, N_runs=100)
@@ -1051,7 +1136,7 @@ if __name__ == "__main__":
 
 		P, L = optimise_linear_policy(0.001, GOOD_P, single_action, N_runs=100, IC_gen_fn=IC_gen_fn, obs_noise_f=n_f)
 		print(L)
-		policy_loss_fn = get_policy_loss_fn(IC_gen_fn, GOOD_LOSS_SCALES, single_action, 20, 50, which="linear", obs_noise_f=n_f)
+		policy_loss_fn = get_policy_loss_fn(IC_gen_fn, GOOD_LOSS_SCALES, single_action, 20, 50, which="linear", dyn_noise_f=n_f)
 		six_planes(policy_loss_fn, start_state=P, varying_bounds=True, bounds=bounds, NX=N, NY=N, 
 					incl_f=False, pi_multiples=False, filled=False, cmap="plasma", levels=np.linspace(-3, 0, 10), axs=axs)
 

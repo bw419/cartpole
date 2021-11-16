@@ -324,10 +324,10 @@ funcs = []
 def intialise_cfuncs():
 	global funcs
 
-	fun = ctypes.CDLL("../libfun.so")
+	fun = ctypes.CDLL("../libfun1.so")
 
 	out = Popen(
-	    args="nm ../libfun.so", 
+	    args="nm ../libfun1.so", 
 	    shell=True, 
 	    stdout=PIPE
 	).communicate()[0].decode("utf-8")
@@ -338,7 +338,7 @@ def intialise_cfuncs():
 	]
 
 	func_names = [func_name for func_name in attrs if hasattr(fun, func_name)]
-	# print(func_names)
+	print(func_names)
 	funcs = [getattr(fun, func_name) for func_name in func_names]
 
 	offset = 0
@@ -348,12 +348,21 @@ def intialise_cfuncs():
 	for i in [1, 2, 3, 4]:#, 9, 10, 11, 12]:
 		funcs[i].restype = ctypes.c_float
 
+	funcs[5].argtypes = [ctypes.c_uint]
+	funcs[6].restype = ctypes.c_float
 	funcs[7].argtypes = [ctypes.c_float]
+
+	seed = np.random.randint(0, 10000000)
+	seed_C_noise(seed)
+
 
 
 # def try_kfn(state, action):
 # 	funcs[8](ctypes.c_int(256), *[ctypes.c_float(x) for x in [state[0], state[1], state[2], state[3], action]])
 # 	return [x() for x in funcs[9:13]]
+
+def seed_C_noise(seed):
+	funcs[5](ctypes.c_uint(seed))
 
 def set_C_dynamic_noise(dyn_noise):
 	funcs[7](ctypes.c_float(dyn_noise))
@@ -414,8 +423,8 @@ def set_dynamic_noise(dyn_noise=None):
 
 if __name__ == "__main__":
 	print("recompiling c.")
-	run(["cc", "-shared", "-o", "../libfun.so", "../cfuncs.cpp"])
-	
+	run(["cc", "-shared", "-o", "../libfun1.so", "../cfuncs.cpp"])
+
 	intialise_cfuncs()
 	single_action_perf_comparison()
 

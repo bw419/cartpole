@@ -19,14 +19,14 @@ ICs_transition = [np.array([0, 0, -np.pi*3, x]) for x in pole_vels_transition]
 
 def pendulum_phase_portrait():
 
-	for IC_set, c in ((ICs_bound, "tab:blue"), (ICs_unbound[1:], "tab:green"), (ICs_transition, "tab:orange")):
+	for IC_set, c in ((ICs_bound, "tab:pink"), (ICs_unbound[1:], "tab:orange"), (ICs_transition, "tab:red")):
 		for IC in IC_set:
 			for IC1 in [-IC, IC]:
 				states = rollout(IC1, 150, 0.02)
 				states[:,2][np.abs(states[:,2])>2.2*np.pi] = np.nan
 				plt.plot(states[:,2], states[:,3], c=c, lw=1)	
 		
-	plt.show()
+	# plt.show()
 
 def pendulum_time_evolutions():
 
@@ -195,12 +195,12 @@ def make_time_to_mismatch_plots(oscillations=False):
 	ax = ax.flatten()
 	# ax = [ax]
 
-	for i, M_exp in enumerate([9,11]):
-		print(i, M_exp)
+	# for i, M_exp in enumerate([9,11]):
+		# print(i, M_exp)
 
 		# time_until_mismatch_plot(to_update_fn(nonlin_model), ax=ax[i])
-		ax[i].set_title("$M=2^{"+ str(M_exp) +"}$")
-		time_until_mismatch_plot(to_update_fn_w_action(get_optimal_nonlin_fit(M_exp)), ax=ax[i], oscillations=oscillations, max_it=250, N_trials=1000)
+		# ax[i].set_title("$M=2^{"+ str(M_exp) +"}$")
+	time_until_mismatch_plot(to_update_fn_w_action(load_model_function("nonlin_noisy_10_16_obs_0_001")), ax=ax[0], oscillations=oscillations, max_it=250, N_trials=1000)
 
 	plt.show()
 
@@ -208,7 +208,7 @@ def make_time_to_mismatch_plots(oscillations=False):
 if __name__ == "__main__":
 
 
-	make_time_to_mismatch_plots(oscillations=True)
+	# make_time_to_mismatch_plots(oscillations=True)
 
 
 	# exit()
@@ -225,15 +225,24 @@ if __name__ == "__main__":
 
 	for i in range(5):
 		print(i)
-		Ms = [5,6,7,8,9,10,11,12,13]
-		scores = []
-		for M in Ms:
-			s = model_match_score(to_update_fn_w_action(get_optimal_nonlin_fit(M)), frac=.9, thresh=0.2, max_it=12, N_trials=500)
-			scores.append(s)
+		sigma_obs_ax = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, .5]
+		sigma_dyn_ax = [0.02, 0.05, 0.1, 0.2, 0.5, 1., 2., 5., 10.]
 
-		plt.plot(np.power(2., Ms), scores, "kx", ls="")
-	plt.title("Iterations until 10\% of runs diverge")
-	plt.xlabel("Model M")
+		scores = []
+		for i in range(len(sigma_obs_ax)):
+
+			# noise_str = str(sigma_obs_ax[i]).replace(".", "_")
+			noise_str1 = str(sigma_dyn_ax[i]).replace(".", "_")
+			# fname = f"nonlin_noisy_10_16_obs_{noise_str}"
+			fname1 = f"nonlin_noisy_10_16_dyn_{noise_str1}"
+			# s = model_match_score(to_update_fn_w_action(load_model_function(fname, log=False)), frac=.9, thresh=0.2, max_it=12, N_trials=500)
+			s = model_match_score(to_update_fn_w_action(load_model_function(fname1, log=False)), frac=.9, thresh=0.2, max_it=12, N_trials=500)
+
+
+		plt.plot(sigma_dyn_ax, scores, "kx", ls="")
+
+	plt.title("Iterations until 10% of runs diverge vs $\sigma_{dyn}$")
+	plt.xlabel("$\sigma_{dyn}$")
 	plt.semilogx()
 	plt.show()
 
